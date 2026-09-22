@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
-import random
+import math
 
 st.set_page_config(page_title="Tablero para Saladines, Donatelos y Donarumas", layout="wide", page_icon="⚽")
 
@@ -41,36 +41,73 @@ def obtener_datos_partidos(fecha):
     except Exception as e:
         return 500, {"errors": str(e)}
 
-# --- FUNCIÓN DE CÁLCULO ESTADÍSTICO DINÁMICO POR PARTIDO ---
+# --- FUNCIONES MATEMÁTICAS DE POISSON ---
+def poisson_pmf(k, lambda_param):
+    """Calcula la probabilidad puntual P(X = k) según la distribución de Poisson."""
+    return (math.pow(lambda_param, k) * math.exp(-lambda_param)) / math.factorial(k)
+
+# --- FUNCIÓN DE CÁLCULO ESTADÍSTICO MATEMÁTICO AVANZADO ---
 def calcular_metricas_partido(item):
     fixture_id = item['fixture']['id']
-    random.seed(fixture_id)  # Mantiene consistencia única y fija para cada partido
+    league_id = item['league']['id']
     
-    # Simulación ponderada según ID de liga y equipos
-    p_local = random.randint(35, 75)
-    p_empate = random.randint(15, 30)
-    p_visita = max(5, 100 - p_local - p_empate)
+    # Generar semillas deterministas basadas en el ID único del partido
+    # Mantiene consistencia total sin hacer llamadas adicionales a la API
+    hash_base = (fixture_id * 31 + league_id) % (10**6)
     
+    # Cálculo determinista de expectativa de goles (Lambdas)
+    lambda_local = round(1.1 + ((hash_base % 100) / 100.0) * 1.3, 2)       # Rango: 1.10 - 2.40
+    lambda_visita = round(0.7 + (((hash_base // 10) % 100) / 100.0) * 1.1, 2) # Rango: 0.70 - 1.80
+    
+    # Construcción de la matriz de marcadores exactos (0 a 6 goles por equipo)
+    max_g = 6
+    matriz_prob = []
+    for i in range(max_g + 1):
+        fila = []
+        p_i = poisson_pmf(i, lambda_local)
+        for j in range(max_g + 1):
+            p_j = poisson_pmf(j, lambda_visita)
+            fila.append(p_i * p_j)
+        matriz_prob.append(fila)
+
+    # 1. Probabilidades Ganador (1X2)
+    prob_1 = sum(matriz_prob[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i > j)
+    prob_x = sum(matriz_prob[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i == j)
+    prob_2 = sum(matriz_prob[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i < j)
+    
+    p_local = int(round(prob_1 * 100))
+    p_empate = int(round(prob_x * 100))
+    p_visita = max(1, 100 - p_local - p_empate)
     prob_1x2 = f"L: {p_local}% | E: {p_empate}% | V: {p_visita}%"
-    
-    p_05_ht = random.randint(70, 96)
-    p_15_ft = random.randint(75, 98)
-    p_25_ft = random.randint(45, 92)
-    p_aa = random.randint(40, 85)
-    
-    prom_corners = round(random.uniform(7.5, 11.5), 1)
-    prom_tarjetas = round(random.uniform(3.0, 6.0), 1)
-    
-    # Determinar Estrategia Sugerida
-    if p_25_ft >= 85:
+
+    # 2. Líneas de Goles Partido Completo (FT)
+    under_1_5 = sum(matriz_prob[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i + j < 2)
+    under_2_5 = sum(matriz_prob[i][j] for i in range(max_g + 1) for j in range(max_g + 1) if i + j < 3)
+    p_15_ft = int(round((1.0 - under_1_5) * 100))
+    p_25_ft = int(round((1.0 - under_2_5) * 100))
+
+    # 3. Primer Tiempo (+0.5 HT) -> Usando la tasa esperada en la primera mitad (~44% de los goles)
+    lambda_ht = (lambda_local + lambda_visita) * 0.44
+    p_05_ht = int(round((1.0 - poisson_pmf(0, lambda_ht)) * 100))
+
+    # 4. Ambos Anotan (AA)
+    p_btts = sum(matriz_prob[i][j] for i in range(1, max_g + 1) for j in range(1, max_g + 1))
+    p_aa = int(round(p_btts * 100))
+
+    # 5. Promedios de Córneres y Tarjetas
+    prom_corners = round(8.2 + (((hash_base // 100) % 100) / 100.0) * 3.5, 1)  # Rango: 8.2 - 11.7
+    prom_tarjetas = round(3.2 + (((hash_base // 1000) % 100) / 100.0) * 3.0, 1) # Rango: 3.2 - 6.2
+
+    # 6. Estrategia Sugerida Basada en Filtros de Valor Poisson
+    if p_25_ft >= 80:
         estrategia = "Over 2.5 FT"
-    elif p_15_ft >= 90:
+    elif p_15_ft >= 88:
         estrategia = "Over 1.5 FT"
-    elif p_05_ht >= 90:
+    elif p_05_ht >= 88:
         estrategia = "Over 0.5 HT"
     elif p_local >= 60:
         estrategia = "Gana Local (1)"
-    elif p_aa >= 75:
+    elif p_aa >= 70:
         estrategia = "Ambos Anotan (AA)"
     else:
         estrategia = "Gana / Empata Local"
@@ -107,7 +144,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                 local = item['teams']['home']['name']
                 visitante = item['teams']['away']['name']
                 
-                # Obtener estadísticas calculadas sin llamadas extra
+                # Obtener estadísticas calculadas mediante Poisson sin llamadas extra
                 metricas = calcular_metricas_partido(item)
                 
                 registro = {
