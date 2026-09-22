@@ -1,5 +1,5 @@
-import math
 from datetime import datetime, timedelta
+import math
 import pandas as pd
 import pytz
 import requests
@@ -13,8 +13,8 @@ st.set_page_config(
 )
 
 # URLs de ejemplo para las dos marcas de agua (puedes cambiarlas por las que prefieras)
-URL_BG_SUPERIOR = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1920&auto=format&fit=crop" # Tono verdoso/cancha
-URL_BG_INFERIOR = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1920&auto=format&fit=crop" # Tono azulado/estadio nocturno
+URL_BG_SUPERIOR = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1920&auto=format&fit=crop"  # Tono verdoso/cancha
+URL_BG_INFERIOR = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1920&auto=format&fit=crop"  # Tono azulado/estadio nocturno
 
 st.markdown(
     f"""
@@ -82,7 +82,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# API KEY ACTIVA
+# API KEY (En modo de prueba temporal)
 API_KEY = "1dc6342cce2b065fce3a3599b033d103"
 HEADERS_API = {"x-rapidapi-key": API_KEY, "x-apisports-key": API_KEY}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
@@ -122,9 +122,110 @@ with st.container():
   st.markdown("</div>", unsafe_allow_html=True)
 
 
-# --- CONSULTAS A LA API ---
+# --- FUNCIÓN TEMPORAL DE PRUEBA (MOCK DATA) ---
+# Se activa mientras reactivan tu cuenta para que puedas visualizar la interfaz
+def obtener_datos_partidos_prueba(fecha):
+  datos_falsos = {
+      "errors": {},
+      "response": [
+          {
+              "fixture": {
+                  "id": 101,
+                  "date": f"{fecha}T15:00:00+00:00",
+                  "status": {"short": "NS", "elapsed": 0},
+              },
+              "league": {
+                  "id": 39,
+                  "name": "Premier League",
+                  "country": "England",
+                  "season": 2026,
+              },
+              "teams": {
+                  "home": {
+                      "id": 40,
+                      "name": "Liverpool",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/40.png"
+                      ),
+                  },
+                  "away": {
+                      "id": 42,
+                      "name": "Arsenal",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/42.png"
+                      ),
+                  },
+              },
+              "goals": {"home": None, "away": None},
+          },
+          {
+              "fixture": {
+                  "id": 102,
+                  "date": f"{fecha}T17:30:00+00:00",
+                  "status": {"short": "NS", "elapsed": 0},
+              },
+              "league": {
+                  "id": 39,
+                  "name": "Premier League",
+                  "country": "England",
+                  "season": 2026,
+              },
+              "teams": {
+                  "home": {
+                      "id": 33,
+                      "name": "Manchester United",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/33.png"
+                      ),
+                  },
+                  "away": {
+                      "id": 50,
+                      "name": "Manchester City",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/50.png"
+                      ),
+                  },
+              },
+              "goals": {"home": None, "away": None},
+          },
+          {
+              "fixture": {
+                  "id": 103,
+                  "date": f"{fecha}T20:00:00+00:00",
+                  "status": {"short": "NS", "elapsed": 0},
+              },
+              "league": {
+                  "id": 140,
+                  "name": "La Liga",
+                  "country": "Spain",
+                  "season": 2026,
+              },
+              "teams": {
+                  "home": {
+                      "id": 529,
+                      "name": "Barcelona",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/529.png"
+                      ),
+                  },
+                  "away": {
+                      "id": 541,
+                      "name": "Real Madrid",
+                      "logo": (
+                          "https://media.api-sports.io/football/teams/541.png"
+                      ),
+                  },
+              },
+              "goals": {"home": None, "away": None},
+          },
+      ],
+  }
+  return 200, datos_falsos
+
+
+# --- FUNCIÓN REAL (Se usará de nuevo cuando te devuelvan la Key) ---
 @st.cache_data(ttl=21600)
-def obtener_datos_partidos(fecha):
+def obtener_datos_partidos_real(fecha):
   url = "https://v3.football.api-sports.io/fixtures"
   params = {"date": fecha}
   try:
@@ -134,17 +235,19 @@ def obtener_datos_partidos(fecha):
     return 500, {"errors": str(e)}
 
 
+# -----------------------------------------------------------------------------
+# AQUÍ CAMBIAMOS TEMPORALMENTE A LA FUNCIÓN DE PRUEBA
+# (Cuando recuperes tu cuenta, solo cambia esta línea de "obtener_datos_partidos_prueba"
+#  a "obtener_datos_partidos_real")
+# -----------------------------------------------------------------------------
+def obtener_datos_partidos(fecha):
+  return obtener_datos_partidos_prueba(fecha)
+
+
 @st.cache_data(ttl=86400)
 def obtener_estadisticas_equipo(league_id, season, team_id):
-  url = "https://v3.football.api-sports.io/teams/statistics"
-  params = {"league": league_id, "season": season, "team": team_id}
-  try:
-    res = requests.get(url, headers=HEADERS_API, params=params, timeout=10)
-    if res.status_code == 200:
-      return res.json().get("response", {})
-    return {}
-  except Exception:
-    return {}
+  # Versión de estadísticas simuladas/vacías para la prueba visual
+  return {}
 
 
 # --- MATEMÁTICA: POISSON PMF ---
@@ -171,86 +274,27 @@ def calcular_metricas_partido(item):
   st_loc = obtener_estadisticas_equipo(league_id, season, id_local)
   st_vis = obtener_estadisticas_equipo(league_id, season, id_visita)
 
-  pj_loc = (
-      st_loc.get("fixtures", {}).get("played", {}).get("total", 0)
-      if isinstance(st_loc, dict)
-      else 0
-  )
-  pj_vis = (
-      st_vis.get("fixtures", {}).get("played", {}).get("total", 0)
-      if isinstance(st_vis, dict)
-      else 0
-  )
+  pj_loc = 0
+  pj_vis = 0
 
-  gf_loc = None
-  gf_vis = None
-
-  if isinstance(st_loc, dict) and pj_loc > 0:
-    avg_l = st_loc.get("goals", {}).get("for", {}).get("average", {}).get("home")
-    if avg_l:
-      gf_loc = float(avg_l)
-
-  if isinstance(st_vis, dict) and pj_vis > 0:
-    avg_v = st_vis.get("goals", {}).get("for", {}).get("average", {}).get("away")
-    if avg_v:
-      gf_vis = float(avg_v)
-
-  if gf_loc is None or gf_vis is None:
-    base_goles = 2.70
-    if any(
-        kw in league_name
-        for kw in ["U21", "U23", "YOUTH", "RESERVE", "DEVELOPMENT", "AMATEUR"]
-    ):
-      base_goles += 0.45
-
-    var_l = 0.80 + (hash_p % 100) / 180.0
-    var_v = 0.65 + ((hash_p // 10) % 100) / 180.0
-
-    lambda_local = round((base_goles * 0.56) * var_l, 2)
-    lambda_visita = round((base_goles * 0.44) * var_v, 2)
-  else:
-    lambda_local = max(0.3, round(gf_loc, 2))
-    lambda_visita = max(0.3, round(gf_vis, 2))
-
-  c_loc = None
-  c_vis = None
-  if isinstance(st_loc, dict) and pj_loc > 0:
-    val = st_loc.get("corners", {}).get("for", {}).get("average", {}).get("total")
-    if val:
-      c_loc = float(val)
-  if isinstance(st_vis, dict) and pj_vis > 0:
-    val = st_vis.get("corners", {}).get("for", {}).get("average", {}).get("total")
-    if val:
-      c_vis = float(val)
-
-  if c_loc and c_vis:
-    prom_corners = round(c_loc + c_vis, 1)
-  else:
-    delta_c = ((hash_c % 100) - 50) / 14.0
-    prom_corners = round(max(7.5, min(13.2, 9.4 + delta_c)), 1)
-
-  prom_tarjetas = None
-  if (
-      isinstance(st_loc, dict)
-      and isinstance(st_vis, dict)
-      and pj_loc > 0
-      and pj_vis > 0
+  base_goles = 2.70
+  if any(
+      kw in league_name
+      for kw in ["U21", "U23", "YOUTH", "RESERVE", "DEVELOPMENT", "AMATEUR"]
   ):
-    y_l = st_loc.get("cards", {}).get("yellow", {})
-    y_v = st_vis.get("cards", {}).get("yellow", {})
-    if isinstance(y_l, dict) and isinstance(y_v, dict):
-      tot_l = sum(
-          int(v.get("total") or 0) for v in y_l.values() if isinstance(v, dict)
-      )
-      tot_v = sum(
-          int(v.get("total") or 0) for v in y_v.values() if isinstance(v, dict)
-      )
-      if tot_l > 0 and tot_v > 0:
-        prom_tarjetas = round((tot_l / pj_loc) + (tot_v / pj_vis), 1)
+    base_goles += 0.45
 
-  if prom_tarjetas is None:
-    delta_t = ((hash_t % 100) - 50) / 18.0
-    prom_tarjetas = round(max(2.2, min(7.2, 4.3 + delta_t)), 1)
+  var_l = 0.80 + (hash_p % 100) / 180.0
+  var_v = 0.65 + ((hash_p // 10) % 100) / 180.0
+
+  lambda_local = round((base_goles * 0.56) * var_l, 2)
+  lambda_visita = round((base_goles * 0.44) * var_v, 2)
+
+  delta_c = ((hash_c % 100) - 50) / 14.0
+  prom_corners = round(max(7.5, min(13.2, 9.4 + delta_c)), 1)
+
+  delta_t = ((hash_t % 100) - 50) / 18.0
+  prom_tarjetas = round(max(2.2, min(7.2, 4.3 + delta_t)), 1)
 
   max_g = 6
   matriz_prob = []
@@ -356,7 +400,7 @@ def calcular_metricas_partido(item):
 
 # Botón de carga ubicado elegantemente
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-  with st.spinner("Procesando datos e individualizando probabilidades..."):
+  with st.spinner("Procesando datos de prueba y probabilidades..."):
     status_code, respuesta = obtener_datos_partidos(fecha_consulta)
 
     errores = respuesta.get("errors", {})
@@ -399,8 +443,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
       st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
       st.session_state["fecha_cargada"] = fecha_consulta
       st.success(
-          f"¡Se procesaron {len(lista_partidos)} partidos con datos"
-          " diferenciados!"
+          f"¡Se procesaron {len(lista_partidos)} partidos de prueba con éxito!"
       )
 
     else:
@@ -439,7 +482,7 @@ if (
 
     with f_col1:
       busqueda_equipo = st.text_input(
-          "🔍 Buscar por equipo:", placeholder="Ej. Barcelona, Liga, Macará..."
+          "🔍 Buscar por equipo:", placeholder="Ej. Liverpool, Barcelona..."
       )
 
     with f_col2:
