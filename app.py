@@ -6,48 +6,62 @@ import requests
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS PERSONALIZADOS (DISEÑO Y BORDES SUAVES)
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON MARCA DE AGUA Y DISEÑO MEJORADO
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Tablero de Predicciones", layout="wide", page_icon="⚽"
 )
 
-# Estilos CSS para suavizar la interfaz, bordes redondeados y tarjetas
+# URL para la marca de agua de fondo (estilo fútbol sutil)
+URL_FONDO_MARCA_AGUA = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1920&auto=format&fit=crop"
+
+# Estilos CSS combinados (marca de agua, bordes suaves y tarjetas)
 st.markdown(
-    """
+    f"""
     <style>
+    /* Fondo con marca de agua sutil en toda la aplicación */
+    .stApp {{
+        background: linear-gradient(rgba(14, 17, 23, 0.92), rgba(14, 17, 23, 0.95)), 
+                    url("{URL_FONDO_MARCA_AGUA}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }}
+
     /* Redondear bordes de botones y cajas */
-    .stButton>button {
+    .stButton>button {{
         border-radius: 12px !important;
         font-weight: bold !important;
         transition: all 0.3s ease !important;
-    }
+    }}
     
     /* Estilo de contenedores desplegables (Expanders) */
-    .streamlit-expanderHeader {
-        background-color: #1a1c23 !important;
+    .streamlit-expanderHeader {{
+        background-color: rgba(26, 28, 35, 0.8) !important;
         border-radius: 10px !important;
         padding: 10px !important;
-    }
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }}
     
-    div[data-aria-expanded="true"] {
-        border: 1px solid #2e323f !important;
+    div[data-aria-expanded="true"] {{
+        border: 1px solid rgba(46, 50, 63, 0.8) !important;
         border-radius: 12px !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3) !important;
-    }
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    }}
 
     /* Bordes suavizados en inputs y selecciones */
-    .stTextInput>div>div>input, .stSelectbox>div>div {
+    .stTextInput>div>div>input, .stSelectbox>div>div {{
         border-radius: 8px !important;
-    }
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }}
 
     /* Estilo para imágenes pequeñas alineadas en tablas */
-    .team-logo {
+    .team-logo {{
         width: 24px;
         height: 24px;
         vertical-align: middle;
         margin-right: 6px;
-    }
+    }}
     </style>
 """,
     unsafe_allow_html=True,
@@ -58,7 +72,16 @@ API_KEY = "1dc6342cce2b065fce3a3599b033d103"
 HEADERS_API = {"x-rapidapi-key": API_KEY, "x-apisports-key": API_KEY}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 
-st.title("⚽ Tablero para Saladines, Donatelos y Donarumas")
+# --- CABECERA CON IMAGEN AL LADO DEL TÍTULO ---
+col_tit1, col_tit2 = st.columns([0.07, 0.93])
+with col_tit1:
+    st.image(
+        "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?w=100&auto=format&fit=crop",
+        width=55,
+    )
+with col_tit2:
+    st.title("Tablero para Saladines, Donatelos y Donarumas")
+
 st.markdown(
     "Análisis dinámico individualizado por equipo y encuentro (Goles, "
     "Córneres y Tarjetas únicos por partido)."
@@ -145,7 +168,9 @@ def calcular_metricas_partido(item):
     gf_vis = None
 
     if isinstance(st_loc, dict) and pj_loc > 0:
-      avg_l = st_loc.get("goals", {}).get("for", {}).get("average", {}).get("home")
+      avg_l = (
+          st_loc.get("goals", {}).get("for", {}).get("average", {}).get("home")
+      )
       if avg_l:
         gf_loc = float(avg_l)
 
@@ -185,13 +210,19 @@ def calcular_metricas_partido(item):
     c_vis = None
     if isinstance(st_loc, dict) and pj_loc > 0:
       val = (
-          st_loc.get("corners", {}).get("for", {}).get("average", {}).get("total")
+          st_loc.get("corners", {})
+          .get("for", {})
+          .get("average", {})
+          .get("total")
       )
       if val:
         c_loc = float(val)
     if isinstance(st_vis, dict) and pj_vis > 0:
       val = (
-          st_vis.get("corners", {}).get("for", {}).get("average", {}).get("total")
+          st_vis.get("corners", {})
+          .get("for", {})
+          .get("average", {})
+          .get("total")
       )
       if val:
         c_vis = float(val)
