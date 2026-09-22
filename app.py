@@ -49,6 +49,15 @@ st.markdown(
         margin-bottom: 20px;
     }}
 
+    /* Estilo para reducir la fuente del título de partidos listados */
+    .subtitulo-seccion {{
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 15px;
+    }}
+
     /* Contenedores translúcidos para mantener la elegancia y visibilidad */
     .zona-general {{
         background-color: rgba(14, 17, 23, 0.75);
@@ -423,13 +432,22 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
 
         metricas = calcular_metricas_partido(item)
 
+        # Aquí unimos el escudo pequeño directamente al lado del nombre en la columna Partido
+        partido_con_escudos = (
+            f"<div style='display: flex; align-items: center; gap: 8px;'>"
+            f"<img src='{logo_local}' width='18' height='18' style='vertical-align: middle;'/>"
+            f"<span>{local}</span>"
+            f"<span style='color: #94a3b8; margin: 0 4px;'>vs</span>"
+            f"<img src='{logo_visita}' width='18' height='18' style='vertical-align: middle;'/>"
+            f"<span>{visitante}</span>"
+            f"</div>"
+        )
+
         registro = {
-            "Liga": nombre_liga,
             "Hora (Ecuador)": hora_str,
-            "Escudo L.": logo_local,
-            "Escudo V.": logo_visita,
-            "Partido": f"{local} vs {visitante}",
+            "Partido": partido_con_escudos,
             **metricas,
+            "Liga_Oculta": nombre_liga,
         }
 
         lista_partidos.append(registro)
@@ -470,7 +488,12 @@ if (
   with st.container():
     st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
-    st.subheader(f"📊 Partidos listados para: {fecha_consulta}")
+    # Cabecera de la sección con un balón (⚽) en lugar del gráfico antiguo y fuente más chica
+    st.markdown(
+        f"<div class='subtitulo-seccion'>⚽ Partidos listados para:"
+        f" {fecha_consulta}</div>",
+        unsafe_allow_html=True,
+    )
 
     f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
 
@@ -520,32 +543,25 @@ if (
 
     st.markdown(f"**Partidos mostrados:** `{len(df)}`")
 
-    ligas_unicas = df["Liga"].unique()
+    ligas_unicas = df["Liga_Oculta"].unique()
 
     if len(ligas_unicas) == 0:
       st.info("No se encontraron partidos con los filtros aplicados.")
     else:
       for liga in ligas_unicas:
-        df_liga = df[df["Liga"] == liga]
+        df_liga = df[df["Liga_Oculta"] == liga]
 
         with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
-          df_mostrar = df_liga.drop(columns=["Liga"])
+          # Ocultamos la columna auxiliar de liga para la tabla
+          df_mostrar = df_liga.drop(columns=["Liga_Oculta"])
 
-          st.dataframe(
+          st.write(
               df_mostrar.style.map(
                   aplicar_colores,
                   subset=["+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)", "AA (%)"],
-              ).format({"Prom. Córneres": "{:.1f}", "Prom. Tarjetas": "{:.1f}"}),
-              column_config={
-                  "Escudo L.": st.column_config.ImageColumn(
-                      "Local", help="Escudo equipo local"
-                  ),
-                  "Escudo V.": st.column_config.ImageColumn(
-                      "Visita", help="Escudo equipo visitante"
-                  ),
-              },
-              use_container_width=True,
-              hide_index=True,
+              ).format({"Prom. Córneres": "{:.1f}", "Prom. Tarjetas": "{:.1f}"})
+              .to_html(escape=False, index=False),
+              unsafe_allow_html=True,
           )
 
     st.markdown("</div>", unsafe_allow_html=True)
