@@ -1,85 +1,68 @@
 import math
-from datetime import datetime, timedelta
-import pandas as pd
-import pytz
 import requests
+import datetime
 import streamlit as st
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Tablero de Predicciones - Estadísticas Reales",
-    layout="wide",
+    page_title="Tablero de Predicciones",
     page_icon="⚽",
+    layout="wide",
 )
 
-# CREDENCIALES Y CONFIGURACIÓN HORARIA
-API_KEY = "1dc6342cce2b065fce3a3599b033d103"
-HEADERS_API = {"x-rapidapi-key": API_KEY, "x-apisports-key": API_KEY}
-TZ_ECUADOR = pytz.timezone("America/Guayaquil")
-
-st.title("⚽ Tablero de Predicciones con Estadísticas Reales")
-st.markdown(
-    "Modelo de Predicción Avanzado: **Dixon-Coles + Poisson Recompuesto** y"
-    " **Estadísticas Reales de Temporada** (Córneres y Tarjetas)."
+st.title("⚽ Tablero de Predicciones para Saladines, Donnarummas y Donatellos")
+st.caption(
+    "Modelo de Predicción Avanzado: Dixon-Coles + Poisson Recompuesto y"
+    " Estadísticas Reales de Temporada (Córneres y Tarjetas)."
 )
 
 # -----------------------------------------------------------------------------
-# SELECCIÓN DE FECHA DE CONSULTA
+# CONFIGURACIÓN DE API Y HEADERS
 # -----------------------------------------------------------------------------
-col1, col2 = st.columns([1, 2])
-with col1:
-  opcion_fecha = st.radio(
-      "Selecciona la fecha a consultar:", ["Hoy", "Mañana"], horizontal=True
-  )
-
-ahora_ec = datetime.now(TZ_ECUADOR)
-if opcion_fecha == "Mañana":
-  fecha_consulta = (ahora_ec + timedelta(days=1)).strftime("%Y-%m-%d")
-else:
-  fecha_consulta = ahora_ec.strftime("%Y-%m-%d")
+API_KEY = "f7344be9e4b601f0fa23f7e5968b55d9"
+BASE_URL = "https://v3.football.api-sports.io"
+HEADERS = {"x-apisports-key": API_KEY}
 
 
 # -----------------------------------------------------------------------------
-# CONSULTAS A LA API CON CACHÉ DE CERO COSTO DE REQUEST
+# FUNCIONES DE APOYO MATEMÁTICO (POISSON)
 # -----------------------------------------------------------------------------
-@st.cache_data(ttl=21600)  # Caché de 6 horas para partidos de la jornada
-def obtener_datos_partidos(fecha):
-  url = "https://v3.football.api-sports.io/fixtures"
-  params = {"date": fecha}
+def poisson_pmf(k, lamb):
+  if lamb <= 0:
+    return 1.0 if k == 0 else 0.0
+  return (math.pow(lamb, k) * math.exp(-lamb)) / math.factorial(k)
+
+
+# -----------------------------------------------------------------------------
+# CONSULTAS A API SPORTS (CON CACHE)
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=3600)
+def obtener_partidos_fecha(fecha_str):
+  url = f"{BASE_URL}/fixtures?date={fecha_str}"
   try:
-    res = requests.get(url, headers=HEADERS_API, params=params, timeout=12)
-    return res.status_code, res.json()
+    res = requests.get(url, headers=HEADERS, timeout=10).json()
+    return res.get("response", [])
   except Exception as e:
-    return 500, {"errors": str(e)}
+    st.error(f"Error al conectar con API-Sports: {e}")
+    return []
 
 
-@st.cache_data(ttl=86400)  # Caché de 24 horas por equipo/temporada (Ahorro de API Key)
+@st.cache_data(ttl=86400)
 def obtener_estadisticas_equipo(league_id, season, team_id):
-  """Obtiene las estadísticas reales acumuladas del equipo durante la temporada actual."""
-  url = "https://v3.football.api-sports.io/teams/statistics"
-  params = {"league": league_id, "season": season, "team": team_id}
-  try:
-    res = requests.get(url, headers=HEADERS_API, params=params, timeout=10)
-    if res.status_code == 200:
-      return res.json().get("response", {})
-  except Exception:
-    pass
-  return {}
-
-
-# -----------------------------------------------------------------------------
-# NÚCLEO MATEMÁTICO: POISSON Y DIXON-COLES
-# -----------------------------------------------------------------------------
-def poisson_pmf(k, lambda_param):
-  return (math.pow(lambda_param, k) * math.exp(-lambda_param)) / math.factorial(
-      k
+  url = (
+      f"{BASE_URL}/teams/statistics?league={league_id}&season={season}&team={team_id}"
   )
+  try:
+    res = requests.get(url, headers=HEADERS, timeout=10).json()
+    return res.get("response", {})
+  except Exception:
+    return {}
 
 
 # -----------------------------------------------------------------------------
-# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS
+# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS (TOTALMENTE BLINDADO)
 # -----------------------------------------------------------------------------
 def calcular_metricas_completas(item):
   fixture_id = item["fixture"]["id"]
@@ -89,15 +72,32 @@ def calcular_metricas_completas(item):
 
   id_local = item["teams"]["home"]["id"]
   id_visita = item["teams"]["away"]["id"]
-  nombre_local = item["teams"]["home"]["name"].upper()
-  nombre_visita = item["teams"]["away"]["name"].upper()
 
   # 1. OBTENCIÓN DE ESTADÍSTICAS REALES DESDE API SPORTS
   stats_local = obtener_estadisticas_equipo(league_id, season, id_local)
   stats_visita = obtener_estadisticas_equipo(league_id, season, id_visita)
 
-  played_l = stats_local.get("fixtures", {}).get("played", {}).get("total", 0)
-  played_v = stats_visita.get("fixtures", {}).get("played", {}).get("total", 0)
+  # Validación estricta para evitar AttributeError
+  if not isinstance(stats_local, dict):
+    stats_local = {}
+  if not isinstance(stats_visita, dict):
+    stats_visita = {}
+
+  fixtures_l = stats_local.get("fixtures", {})
+  fixtures_v = stats_visita.get("fixtures", {})
+
+  if not isinstance(fixtures_l, dict):
+    fixtures_l = {}
+  if not isinstance(fixtures_v, dict):
+    fixtures_v = {}
+
+  played_l = fixtures_l.get("played", {}).get("total", 0)
+  played_v = fixtures_v.get("played", {}).get("total", 0)
+
+  if not isinstance(played_l, int):
+    played_l = 0
+  if not isinstance(played_v, int):
+    played_v = 0
 
   # A. CÓRNERES REALES
   real_corners_found = False
@@ -107,9 +107,13 @@ def calcular_metricas_completas(item):
     if played_l > 0 and played_v > 0:
       c_local = (
           stats_local.get("corners", {}).get("for", {}).get("average", {})
+          if isinstance(stats_local.get("corners"), dict)
+          else {}
       )
       c_visita = (
           stats_visita.get("corners", {}).get("for", {}).get("average", {})
+          if isinstance(stats_visita.get("corners"), dict)
+          else {}
       )
 
       avg_c_l = (
@@ -129,10 +133,10 @@ def calcular_metricas_completas(item):
   except Exception:
     pass
 
-  # Fallback Inteligente Dinámico si no hay datos en la API para esa liga
+  # Fallback Inteligente si no hay datos en la API para esa liga
   if not real_corners_found:
     hash_c = (fixture_id * 41 + id_local * 23 + id_visita * 7) % 1000
-    prom_corners = round(8.2 + (hash_c / 200.0), 1)  # Rango de 8.2 a 13.2
+    prom_corners = round(8.2 + (hash_c / 200.0), 1)
 
   # B. TARJETAS REALES
   real_cards_found = False
@@ -140,20 +144,39 @@ def calcular_metricas_completas(item):
 
   try:
     if played_l > 0 and played_v > 0:
-      cards_l = stats_local.get("cards", {})
-      cards_v = stats_visita.get("cards", {})
+      cards_l = (
+          stats_local.get("cards", {})
+          if isinstance(stats_local.get("cards"), dict)
+          else {}
+      )
+      cards_v = (
+          stats_visita.get("cards", {})
+          if isinstance(stats_visita.get("cards"), dict)
+          else {}
+      )
+
+      yellow_l = (
+          cards_l.get("yellow", {})
+          if isinstance(cards_l.get("yellow"), dict)
+          else {}
+      )
+      yellow_v = (
+          cards_v.get("yellow", {})
+          if isinstance(cards_v.get("yellow"), dict)
+          else {}
+      )
 
       tot_yellow_l = sum(
           [
               int(v.get("total") or 0)
-              for k, v in cards_l.get("yellow", {}).items()
+              for k, v in yellow_l.items()
               if isinstance(v, dict)
           ]
       )
       tot_yellow_v = sum(
           [
               int(v.get("total") or 0)
-              for k, v in cards_v.get("yellow", {}).items()
+              for k, v in yellow_v.items()
               if isinstance(v, dict)
           ]
       )
@@ -166,15 +189,14 @@ def calcular_metricas_completas(item):
   except Exception:
     pass
 
-  # Fallback Inteligente Dinámico para tarjetas
+  # Fallback Inteligente para tarjetas
   if not real_cards_found:
     hash_t = (fixture_id * 53 + id_local * 11 + id_visita * 29) % 1000
-    prom_tarjetas = round(2.8 + (hash_t / 220.0), 1)  # Rango de 2.8 a 7.3
+    prom_tarjetas = round(2.8 + (hash_t / 220.0), 1)
 
   # 2. GOLES REALES Y EXPECTATIVA DE GOL (LAMBDA)
   prom_goles_base = 2.65
 
-  # Ajuste por categoría de liga / juvenil
   keywords_over = [
       "RESERVE",
       "YOUTH",
@@ -191,6 +213,9 @@ def calcular_metricas_completas(item):
   ]
   keywords_filial = [" II", " III", " B", " C", " U21", " U19"]
 
+  nombre_local = item["teams"]["home"]["name"].upper()
+  nombre_visita = item["teams"]["away"]["name"].upper()
+
   if any(kw in league_name for kw in keywords_over):
     prom_goles_base += 0.35
   if any(
@@ -199,12 +224,26 @@ def calcular_metricas_completas(item):
   ):
     prom_goles_base += 0.30
 
-  # Intentamos usar promedios reales de goles si existen en la API
+  goals_l = (
+      stats_local.get("goals", {})
+      if isinstance(stats_local.get("goals"), dict)
+      else {}
+  )
+  goals_v = (
+      stats_visita.get("goals", {})
+      if isinstance(stats_visita.get("goals"), dict)
+      else {}
+  )
+
   goals_for_l = (
-      stats_local.get("goals", {}).get("for", {}).get("average", {})
+      goals_l.get("for", {}).get("average", {})
+      if isinstance(goals_l.get("for"), dict)
+      else {}
   )
   goals_for_v = (
-      stats_visita.get("goals", {}).get("for", {}).get("average", {})
+      goals_v.get("for", {}).get("average", {})
+      if isinstance(goals_v.get("for"), dict)
+      else {}
   )
 
   try:
@@ -225,7 +264,6 @@ def calcular_metricas_completas(item):
 
   prom_goles_base = max(2.10, min(3.90, prom_goles_base))
 
-  # Factores de variabilidad dinámicos por encuentro
   hash_p = (fixture_id * 31 + id_local * 17 + id_visita * 13) % 1000
   var_local = 0.85 + ((hash_p % 100) / 200.0)
   var_visita = 0.72 + (((hash_p // 10) % 100) / 200.0)
@@ -262,7 +300,6 @@ def calcular_metricas_completas(item):
   suma_total = sum(sum(f) for f in matriz_prob)
   matriz_prob = [[cell / suma_total for cell in f] for f in matriz_prob]
 
-  # DEDUCCIÓN DE PROBABILIDADES
   prob_1 = sum(
       matriz_prob[i][j]
       for i in range(max_g + 1)
@@ -313,7 +350,6 @@ def calcular_metricas_completas(item):
   )
   p_aa = int(round(p_btts * 100))
 
-  # SELECCIÓN DE ESTRATEGIA SUGERIDA
   if p_25_ft >= 75:
     estrategia = "Over 2.5 FT"
   elif p_15_ft >= 80:
@@ -340,152 +376,65 @@ def calcular_metricas_completas(item):
 
 
 # -----------------------------------------------------------------------------
-# BOTÓN DE ACCIÓN Y CARGA DE DATOS
+# INTERFAZ Y CONTROL DE FECHAS
 # -----------------------------------------------------------------------------
-if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-  with st.spinner(
-      "Procesando partidos con Poisson Recompuesto y Estadísticas Reales..."
-  ):
-    status_code, respuesta = obtener_datos_partidos(fecha_consulta)
+opcion_fecha = st.radio(
+    "Selecciona la fecha a consultar:", ("Hoy", "Mañana"), horizontal=True
+)
+fecha_consulta = datetime.date.today()
+if opcion_fecha == "Mañana":
+  fecha_consulta += datetime.timedelta(days=1)
 
-    errores = respuesta.get("errors", {})
-    datos = respuesta.get("response", [])
+fecha_str = fecha_consulta.strftime("%Y-%m-%d")
 
-    if status_code == 200 and not errores and datos:
-      lista_partidos = []
-
-      for item in datos:
-        nombre_liga = (
-            f"{item['league']['country'].upper()} -"
-            f" {item['league']['name'].upper()}"
-        )
-
-        fecha_utc = datetime.fromisoformat(
-            item["fixture"]["date"].replace("Z", "+00:00")
-        )
-        fecha_ec = fecha_utc.astimezone(TZ_ECUADOR)
-        hora_str = fecha_ec.strftime("%H:%M")
-
-        local = item["teams"]["home"]["name"]
-        visitante = item["teams"]["away"]["name"]
-
-        metricas = calcular_metricas_completas(item)
-
-        registro = {
-            "Liga": nombre_liga,
-            "Hora (Ecuador)": hora_str,
-            "Partido": f"{local} vs {visitante}",
-            **metricas,
-        }
-
-        lista_partidos.append(registro)
-
-      st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
-      st.session_state["fecha_cargada"] = fecha_consulta
-      st.success(
-          f"¡Se procesaron {len(lista_partidos)} partidos exitosamente con"
-          " datos certeros!"
-      )
-
-    else:
-      st.error(f"Error al consultar la API (Código HTTP: {status_code})")
-      if errores:
-        st.write("Respuesta de la API:", errores)
-
+if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_str})"):
+  st.cache_data.clear()
 
 # -----------------------------------------------------------------------------
-# FUNCIONES DE FORMATO Y COLOR
+# DESPLIEGUE DE RESULTADOS
 # -----------------------------------------------------------------------------
-def aplicar_colores(val):
-  if isinstance(val, (int, float)):
-    if val >= 80:
-      return (
-          "background-color: #1e4620; color: #75fb8d; font-weight: bold;"
-      )  # Verde
-    elif val >= 75:
-      return "background-color: #3d350c; color: #ffeb7a;"  # Amarillo
-  return ""
+partidos = obtener_partidos_fecha(fecha_str)
 
+if not partidos:
+  st.warning(f"No se encontraron partidos programados para la fecha {fecha_str}.")
+else:
+  st.success(
+      f"Se encontraron {len(partidos)} partidos para el día {fecha_str}."
+  )
 
-# -----------------------------------------------------------------------------
-# VISUALIZACIÓN Y FILTROS INTERACTIVOS
-# -----------------------------------------------------------------------------
-if (
-    "df_partidos" in st.session_state
-    and st.session_state.get("fecha_cargada") == fecha_consulta
-):
-  df = st.session_state["df_partidos"].copy()
+  datos_tabla = []
+  prog_bar = st.progress(0)
 
-  st.markdown("---")
-  st.subheader(f"📊 Partidos listados para: {fecha_consulta}")
+  for idx, item in enumerate(partidos):
+    hora = item["fixture"]["date"][11:16]
+    liga = item["league"]["name"]
+    local = item["teams"]["home"]["name"]
+    visita = item["teams"]["away"]["name"]
 
-  f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
+    # Cálculo seguro de métricas
+    m = calcular_metricas_completas(item)
 
-  with f_col1:
-    busqueda_equipo = st.text_input(
-        "🔍 Buscar por equipo:", placeholder="Ej. Abahani, Fortis, Vietnam..."
-    )
+    datos_tabla.append({
+        "Hora": hora,
+        "Liga": liga,
+        "Partido": f"{local} vs {visita}",
+        "Estrategia": m["Estrategia Sugerida"],
+        "1X2 %": m["Prob. Ganador (1X2)"],
+        "+0.5 HT": f"{m['+0.5 HT (%)']}%",
+        "+1.5 FT": f"{m['+1.5 FT (%)']}%",
+        "+2.5 FT": f"{m['+2.5 FT (%)']}%",
+        "Ambos Anotan": f"{m['AA (%)']}%",
+        "Prom. Córneres": m["Prom. Córneres"],
+        "Prom. Tarjetas": m["Prom. Tarjetas"],
+    })
 
-  with f_col2:
-    filtro_probabilidad = st.selectbox(
-        "🎯 Filtro de probabilidad:",
-        [
-            "Todos los partidos",
-            "Solo ≥ 75% en +0.5 HT (Primer Tiempo)",
-            "Solo ≥ 80% en +0.5 HT (Primer Tiempo)",
-            "Solo ≥ 80% en +1.5 FT (Partido Completo)",
-            "Solo ≥ 75% en +2.5 FT (Partido Completo)",
-        ],
-    )
+    prog_bar.progress((idx + 1) / len(partidos))
 
-  with f_col3:
-    ordenar_por = st.selectbox(
-        "↕️ Ordenar resultados por:",
-        ["Hora (Ecuador)", "+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
-    )
+  prog_bar.empty()
 
-  # Aplicar filtros
-  if busqueda_equipo:
-    df = df[df["Partido"].str.contains(busqueda_equipo, case=False, na=False)]
-
-  if filtro_probabilidad == "Solo ≥ 75% en +0.5 HT (Primer Tiempo)":
-    df = df[df["+0.5 HT (%)"] >= 75]
-  elif filtro_probabilidad == "Solo ≥ 80% en +0.5 HT (Primer Tiempo)":
-    df = df[df["+0.5 HT (%)"] >= 80]
-  elif filtro_probabilidad == "Solo ≥ 80% en +1.5 FT (Partido Completo)":
-    df = df[df["+1.5 FT (%)"] >= 80]
-  elif filtro_probabilidad == "Solo ≥ 75% en +2.5 FT (Partido Completo)":
-    df = df[df["+2.5 FT (%)"] >= 75]
-
-  if ordenar_por == "+1.5 FT (%)":
-    df = df.sort_values(by="+1.5 FT (%)", ascending=False)
-  elif ordenar_por == "+2.5 FT (%)":
-    df = df.sort_values(by="+2.5 FT (%)", ascending=False)
-  elif ordenar_por == "+0.5 HT (%)":
-    df = df.sort_values(by="+0.5 HT (%)", ascending=False)
-  else:
-    df = df.sort_values(by="Hora (Ecuador)", ascending=True)
-
-  st.markdown(f"**Partidos mostrados:** `{len(df)}`")
-
-  ligas_unicas = df["Liga"].unique()
-
-  if len(ligas_unicas) == 0:
-    st.info("No se encontraron partidos con los filtros aplicados.")
-  else:
-    for liga in ligas_unicas:
-      df_liga = df[df["Liga"] == liga]
-
-      with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
-        df_mostrar = df_liga.drop(columns=["Liga"])
-
-        st.dataframe(
-            df_mostrar.style.map(
-                aplicar_colores,
-                subset=["+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)", "AA (%)"],
-            ).format(
-                {"Prom. Córneres": "{:.1f}", "Prom. Tarjetas": "{:.1f}"}
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+  # Mostrar la tabla final
+  st.dataframe(
+      datos_tabla,
+      use_container_width=True,
+      hide_index=True,
+  )
