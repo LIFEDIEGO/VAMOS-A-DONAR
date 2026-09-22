@@ -112,7 +112,6 @@ TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 with st.container():
   st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
-  # Título y subtítulo perfectamente centrados con tipografía personalizada
   st.markdown(
       '<div class="titulo-principal">Saladines, Donatelos y Donarumas</div>',
       unsafe_allow_html=True,
@@ -239,24 +238,8 @@ def obtener_datos_partidos_prueba(fecha):
   return 200, datos_falsos
 
 
-@st.cache_data(ttl=21600)
-def obtener_datos_partidos_real(fecha):
-  url = "https://v3.football.api-sports.io/fixtures"
-  params = {"date": fecha}
-  try:
-    res = requests.get(url, headers=HEADERS_API, params=params, timeout=12)
-    return res.status_code, res.json()
-  except Exception as e:
-    return 500, {"errors": str(e)}
-
-
 def obtener_datos_partidos(fecha):
   return obtener_datos_partidos_prueba(fecha)
-
-
-@st.cache_data(ttl=86400)
-def obtener_estadisticas_equipo(league_id, season, team_id):
-  return {}
 
 
 # --- MATEMÁTICA: POISSON PMF ---
@@ -269,8 +252,6 @@ def poisson_pmf(k, lambda_param):
 # --- CÁLCULO DE MÉTRICAS INDIVIDUALES ÚNICAS ---
 def calcular_metricas_partido(item):
   fixture_id = item["fixture"]["id"]
-  league_id = item["league"]["id"]
-  season = item["league"]["season"]
   league_name = item["league"]["name"].upper()
 
   id_local = item["teams"]["home"]["id"]
@@ -350,7 +331,6 @@ def calcular_metricas_partido(item):
   p_local = int(round(prob_1 * 100))
   p_empate = int(round(prob_x * 100))
   p_visita = max(1, 100 - p_local - p_empate)
-  prob_1x2 = f"L: {p_local}% | E: {p_empate}% | V: {p_visita}%"
 
   under_1_5 = sum(
       matriz_prob[i][j]
@@ -390,7 +370,9 @@ def calcular_metricas_partido(item):
     estrategia = "Gana / Empata Local"
 
   return {
-      "Prob. Ganador (1X2)": prob_1x2,
+      "% Local": p_local,
+      "% Empate": p_empate,
+      "% Visita": p_visita,
       "Estrategia Sugerida": estrategia,
       "+0.5 HT (%)": p_05_ht,
       "+1.5 FT (%)": p_15_ft,
@@ -432,7 +414,6 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
 
         metricas = calcular_metricas_partido(item)
 
-        # Aquí unimos el escudo pequeño directamente al lado del nombre en la columna Partido
         partido_con_escudos = (
             f"<div style='display: flex; align-items: center; gap: 8px;'>"
             f"<img src='{logo_local}' width='18' height='18' style='vertical-align: middle;'/>"
@@ -460,8 +441,6 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
 
     else:
       st.error(f"Error de conexión (Código HTTP: {status_code})")
-      if errores:
-        st.write("Respuesta de la API:", errores)
 
 
 # --- APLICACIÓN DE ESTILOS DE COLOR ---
@@ -488,7 +467,6 @@ if (
   with st.container():
     st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
-    # Cabecera de la sección con un balón (⚽) en lugar del gráfico antiguo y fuente más chica
     st.markdown(
         f"<div class='subtitulo-seccion'>⚽ Partidos listados para:"
         f" {fecha_consulta}</div>",
@@ -552,15 +530,19 @@ if (
         df_liga = df[df["Liga_Oculta"] == liga]
 
         with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
-          # Ocultamos la columna auxiliar de liga para la tabla
           df_mostrar = df_liga.drop(columns=["Liga_Oculta"])
 
           st.write(
               df_mostrar.style.map(
                   aplicar_colores,
                   subset=["+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)", "AA (%)"],
-              ).format({"Prom. Córneres": "{:.1f}", "Prom. Tarjetas": "{:.1f}"})
-              .to_html(escape=False, index=False),
+              ).format({
+                  "% Local": "{:.0f}%",
+                  "% Empate": "{:.0f}%",
+                  "% Visita": "{:.0f}%",
+                  "Prom. Córneres": "{:.1f}",
+                  "Prom. Tarjetas": "{:.1f}",
+              }).to_html(escape=False, index=False),
               unsafe_allow_html=True,
           )
 
