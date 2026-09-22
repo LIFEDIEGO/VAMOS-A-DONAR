@@ -43,9 +43,11 @@ def obtener_partidos_fecha(fecha_str):
   url = f"{BASE_URL}/fixtures?date={fecha_str}"
   try:
     res = requests.get(url, headers=HEADERS, timeout=10).json()
+    if "errors" in res and res["errors"]:
+      st.error(f"Error devuelto por la API: {res['errors']}")
     return res.get("response", [])
   except Exception as e:
-    st.error(f"Error al conectar con API-Sports: {e}")
+    st.error(f"Error de conexión con la API: {e}")
     return []
 
 
@@ -62,7 +64,7 @@ def obtener_estadisticas_equipo(league_id, season, team_id):
 
 
 # -----------------------------------------------------------------------------
-# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS (TOTALMENTE BLINDADO)
+# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS (BLINDADO)
 # -----------------------------------------------------------------------------
 def calcular_metricas_completas(item):
   fixture_id = item["fixture"]["id"]
@@ -73,11 +75,9 @@ def calcular_metricas_completas(item):
   id_local = item["teams"]["home"]["id"]
   id_visita = item["teams"]["away"]["id"]
 
-  # 1. OBTENCIÓN DE ESTADÍSTICAS REALES DESDE API SPORTS
   stats_local = obtener_estadisticas_equipo(league_id, season, id_local)
   stats_visita = obtener_estadisticas_equipo(league_id, season, id_visita)
 
-  # Validación estricta para evitar AttributeError
   if not isinstance(stats_local, dict):
     stats_local = {}
   if not isinstance(stats_visita, dict):
@@ -99,7 +99,7 @@ def calcular_metricas_completas(item):
   if not isinstance(played_v, int):
     played_v = 0
 
-  # A. CÓRNERES REALES
+  # CÓRNERES
   real_corners_found = False
   prom_corners = 9.3
 
@@ -133,12 +133,11 @@ def calcular_metricas_completas(item):
   except Exception:
     pass
 
-  # Fallback Inteligente si no hay datos en la API para esa liga
   if not real_corners_found:
     hash_c = (fixture_id * 41 + id_local * 23 + id_visita * 7) % 1000
     prom_corners = round(8.2 + (hash_c / 200.0), 1)
 
-  # B. TARJETAS REALES
+  # TARJETAS
   real_cards_found = False
   prom_tarjetas = 4.3
 
@@ -189,12 +188,11 @@ def calcular_metricas_completas(item):
   except Exception:
     pass
 
-  # Fallback Inteligente para tarjetas
   if not real_cards_found:
     hash_t = (fixture_id * 53 + id_local * 11 + id_visita * 29) % 1000
     prom_tarjetas = round(2.8 + (hash_t / 220.0), 1)
 
-  # 2. GOLES REALES Y EXPECTATIVA DE GOL (LAMBDA)
+  # GOLES Y LAMBDA
   prom_goles_base = 2.65
 
   keywords_over = [
@@ -271,7 +269,7 @@ def calcular_metricas_completas(item):
   lambda_local = round((prom_goles_base * 0.57) * var_local, 2)
   lambda_visita = round((prom_goles_base * 0.43) * var_visita, 2)
 
-  # 3. MATRIZ DE POISSON CON CORRECCIÓN DIXON-COLES
+  # MATRIZ POISSON
   max_g = 6
   matriz_prob = []
   rho = -0.06
@@ -389,6 +387,7 @@ fecha_str = fecha_consulta.strftime("%Y-%m-%d")
 
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_str})"):
   st.cache_data.clear()
+  st.rerun()
 
 # -----------------------------------------------------------------------------
 # DESPLIEGUE DE RESULTADOS
@@ -396,7 +395,9 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_str})"):
 partidos = obtener_partidos_fecha(fecha_str)
 
 if not partidos:
-  st.warning(f"No se encontraron partidos programados para la fecha {fecha_str}.")
+  st.warning(
+      f"No se encontraron partidos programados para la fecha {fecha_str}."
+  )
 else:
   st.success(
       f"Se encontraron {len(partidos)} partidos para el día {fecha_str}."
@@ -411,7 +412,6 @@ else:
     local = item["teams"]["home"]["name"]
     visita = item["teams"]["away"]["name"]
 
-    # Cálculo seguro de métricas
     m = calcular_metricas_completas(item)
 
     datos_tabla.append({
@@ -432,7 +432,6 @@ else:
 
   prog_bar.empty()
 
-  # Mostrar la tabla final
   st.dataframe(
       datos_tabla,
       use_container_width=True,
