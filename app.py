@@ -96,6 +96,24 @@ st.markdown(
         border-radius: 8px !important;
         background-color: rgba(255, 255, 255, 0.05) !important;
     }}
+
+    /* Estilos para centrar celdas y encabezados en las tablas generadas */
+    table {{
+        width: 100%;
+        border-collapse: collapse;
+    }}
+    th {{
+        text-align: center !important;
+        padding: 8px;
+    }}
+    td {{
+        text-align: center !important;
+        padding: 8px;
+    }}
+    /* La columna 'Partido' la mantenemos alineada a la izquierda para mejor lectura de equipos */
+    td:nth-child(2) {{
+        text-align: left !important;
+    }}
     </style>
 """,
     unsafe_allow_html=True,
@@ -425,7 +443,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
         )
 
         registro = {
-            "Hora (Ecuador)": hora_str,
+            "Hora": hora_str,
             "Partido": partido_con_escudos,
             **metricas,
             "Liga_Oculta": nombre_liga,
@@ -495,7 +513,7 @@ if (
     with f_col3:
       ordenar_por = st.selectbox(
           "↕️ Ordenar resultados por:",
-          ["Hora (Ecuador)", "+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
+          ["Hora", "+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
       )
 
     if busqueda_equipo:
@@ -517,7 +535,7 @@ if (
     elif ordenar_por == "+0.5 HT (%)":
       df = df.sort_values(by="+0.5 HT (%)", ascending=False)
     else:
-      df = df.sort_values(by="Hora (Ecuador)", ascending=True)
+      df = df.sort_values(by="Hora", ascending=True)
 
     st.markdown(f"**Partidos mostrados:** `{len(df)}`")
 
