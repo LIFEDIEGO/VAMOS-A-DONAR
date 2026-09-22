@@ -15,7 +15,7 @@ HEADERS_API = {
 TZ_ECUADOR = pytz.timezone('America/Guayaquil')
 
 st.title("⚽ Tablero de Analítica Deportiva")
-st.markdown("Análisis visual con resaltado de probabilidades (+0.5 HT, +1.5 FT, AA), córneres, tarjetas y ganador (1X2).")
+st.markdown("Análisis visual con resaltado de probabilidades (+0.5 HT, +1.5 FT, +2.5 FT, AA), córneres, tarjetas y ganador (1X2).")
 
 # --- SELECCIÓN DE FECHA ---
 col1, col2 = st.columns([1, 2])
@@ -42,7 +42,7 @@ def obtener_datos_partidos(fecha):
 
 # --- BOTÓN DE CARGA ---
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-    with st.spinner("Procesando partidos y aplicando estilos..."):
+    with st.spinner("Procesando partidos y aplicando métricas..."):
         status_code, respuesta = obtener_datos_partidos(fecha_consulta)
         
         errores = respuesta.get('errors', {})
@@ -69,6 +69,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                     "Estrategia Sugerida": "Over 1.5 FT",
                     "+0.5 HT (%)": 92,
                     "+1.5 FT (%)": 94,
+                    "+2.5 FT (%)": 91,
                     "AA (%)": 65,
                     "Prom. Córneres": 9.5,
                     "Prom. Tarjetas": 4.2
@@ -111,12 +112,16 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
             [
                 "Todos los partidos",
                 "Solo ≥ 90% en +0.5 HT (Primer Tiempo)",
-                "Solo ≥ 90% en +1.5 FT (Partido Completo)"
+                "Solo ≥ 90% en +1.5 FT (Partido Completo)",
+                "Solo ≥ 90% en +2.5 FT (Partido Completo)"
             ]
         )
         
     with f_col3:
-        ordenar_por = st.selectbox("↕️ Ordenar resultados por:", ["Hora (Ecuador)", "+1.5 FT (%)", "+0.5 HT (%)"])
+        ordenar_por = st.selectbox(
+            "↕️ Ordenar resultados por:", 
+            ["Hora (Ecuador)", "+1.5 FT (%)", "+2.5 FT (%)", "+0.5 HT (%)"]
+        )
 
     # Aplicar Filtro de Búsqueda
     if busqueda_equipo:
@@ -127,10 +132,14 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
         df = df[df["+0.5 HT (%)"] >= 90]
     elif filtro_probabilidad == "Solo ≥ 90% en +1.5 FT (Partido Completo)":
         df = df[df["+1.5 FT (%)"] >= 90]
+    elif filtro_probabilidad == "Solo ≥ 90% en +2.5 FT (Partido Completo)":
+        df = df[df["+2.5 FT (%)"] >= 90]
 
     # Ordenar Datos
     if ordenar_por == "+1.5 FT (%)":
         df = df.sort_values(by="+1.5 FT (%)", ascending=False)
+    elif ordenar_por == "+2.5 FT (%)":
+        df = df.sort_values(by="+2.5 FT (%)", ascending=False)
     elif ordenar_por == "+0.5 HT (%)":
         df = df.sort_values(by="+0.5 HT (%)", ascending=False)
     else:
@@ -150,9 +159,10 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
             with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
                 df_mostrar = df_liga.drop(columns=["Liga"])
                 
-                # Formato de mapa de calor usando .map (compatible con Pandas reciente)
+                # Formatear celdas y aplicar mapa de color
                 st.dataframe(
-                    df_mostrar.style.map(aplicar_colores, subset=["+0.5 HT (%)", "+1.5 FT (%)", "AA (%)"]),
+                    df_mostrar.style.map(aplicar_colores, subset=["+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)", "AA (%)"])
+                            .format({"Prom. Córneres": "{:.1f}", "Prom. Tarjetas": "{:.1f}"}),
                     use_container_width=True,
                     hide_index=True
                 )
