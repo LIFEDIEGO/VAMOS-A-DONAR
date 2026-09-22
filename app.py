@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import pytz
 import random
 
-st.set_page_config(page_title="Tablero de Inteligencia Deportiva", layout="wide", page_icon="⚽")
+st.set_page_config(page_title="Tablero para Saladines, Donatelos y Donarumas", layout="wide", page_icon="⚽")
 
 # API KEY ACTIVA
 API_KEY = "1dc6342cce2b065fce3a3599b033d103"
@@ -15,7 +15,7 @@ HEADERS_API = {
 }
 TZ_ECUADOR = pytz.timezone('America/Guayaquil')
 
-st.title("⚽ Tablero de Analítica Deportiva")
+st.title("⚽ Tablero para Saladines, Donatelos y Donarumas")
 st.markdown("Análisis estadístico dinámico con resaltado de probabilidades (+0.5 HT, +1.5 FT, +2.5 FT, AA), córneres, tarjetas y ganador (1X2).")
 
 # --- SELECCIÓN DE FECHA ---
