@@ -18,8 +18,8 @@ st.caption("Modelo de Predicción Avanzado: Dixon-Coles + Poisson Recompuesto y 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE API Y HEADERS
 # -----------------------------------------------------------------------------
-# Puedes poner tu clave directamente o usar st.secrets["API_KEY"] en Streamlit Cloud
-API_KEY = st.secrets.get("API_KEY", "f7344be9e4b601f0fa23f7e5968b55d9")
+# Clave actualizada según tu panel de API-Sports
+API_KEY = "1dc6342cce2b065fce3a3599b033d103"
 BASE_URL = "https://v3.football.api-sports.io"
 
 HEADERS = {
