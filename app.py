@@ -6,48 +6,36 @@ import requests
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON DOBLE MARCA DE WATERMARK (ZONAS)
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON FONDO DE ESTADIO LLENO EN TODA LA PANTALLA
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Tablero de Predicciones", layout="wide", page_icon="⚽"
 )
 
-# URLs de ejemplo para las dos marcas de agua (puedes cambiarlas por las que prefieras)
-URL_BG_SUPERIOR = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1920&auto=format&fit=crop"  # Tono verdoso/cancha
-URL_BG_INFERIOR = "https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1920&auto=format&fit=crop"  # Tono azulado/estadio nocturno
+# Imagen de fondo general: Estadio lleno con césped iluminado
+URL_BG_ESTADIO_LLENO = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1920&auto=format&fit=crop"
 
 st.markdown(
     f"""
     <style>
-    /* Fondo general de la app */
+    /* Fondo general de toda la aplicación con el estadio lleno y capa oscura elegante */
     .stApp {{
-        background-color: #0e1117;
-    }}
-
-    /* Contenedor Superior con marca de agua y tono propio */
-    .zona-superior {{
-        background: linear-gradient(rgba(14, 17, 23, 0.85), rgba(14, 17, 23, 0.92)), 
-                    url("{URL_BG_SUPERIOR}");
+        background: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.94)), 
+                    url("{URL_BG_ESTADIO_LLENO}");
         background-size: cover;
         background-position: center;
+        background-attachment: fixed;
+    }}
+
+    /* Contenedores translúcidos para mantener la elegancia y visibilidad */
+    .zona-general {{
+        background-color: rgba(14, 17, 23, 0.75);
         border: 1px solid rgba(46, 50, 63, 0.6);
         border-radius: 16px;
         padding: 25px;
         margin-bottom: 25px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-    }}
-
-    /* Contenedor Inferior con marca de agua de otro color/tono */
-    .zona-inferior {{
-        background: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.94)), 
-                    url("{URL_BG_INFERIOR}");
-        background-size: cover;
-        background-position: center;
-        border: 1px solid rgba(46, 50, 63, 0.6);
-        border-radius: 16px;
-        padding: 25px;
-        margin-top: 15px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(6px);
     }}
 
     /* Redondear bordes de botones y cajas */
@@ -57,7 +45,7 @@ st.markdown(
         transition: all 0.3s ease !important;
     }}
     
-    /* Estilo de contenedores desplegables (Expanders) dentro de la zona inferior */
+    /* Estilo de contenedores desplegables (Expanders) */
     .streamlit-expanderHeader {{
         background-color: rgba(26, 28, 35, 0.85) !important;
         border-radius: 10px !important;
@@ -69,7 +57,7 @@ st.markdown(
         border: 1px solid rgba(46, 50, 63, 0.9) !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
-        background-color: rgba(14, 17, 23, 0.75) !important;
+        background-color: rgba(14, 17, 23, 0.85) !important;
     }}
 
     /* Bordes suavizados en inputs y selecciones */
@@ -88,10 +76,10 @@ HEADERS_API = {"x-rapidapi-key": API_KEY, "x-apisports-key": API_KEY}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 
 # ==========================================
-# ZONA SUPERIOR (MARCA DE AGUA 1)
+# SECCIÓN SUPERIOR
 # ==========================================
 with st.container():
-  st.markdown('<div class="zona-superior">', unsafe_allow_html=True)
+  st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
   col_tit1, col_tit2 = st.columns([0.07, 0.93])
   with col_tit1:
@@ -123,7 +111,6 @@ with st.container():
 
 
 # --- FUNCIÓN TEMPORAL DE PRUEBA (MOCK DATA) ---
-# Se activa mientras reactivan tu cuenta para que puedas visualizar la interfaz
 def obtener_datos_partidos_prueba(fecha):
   datos_falsos = {
       "errors": {},
@@ -223,7 +210,6 @@ def obtener_datos_partidos_prueba(fecha):
   return 200, datos_falsos
 
 
-# --- FUNCIÓN REAL (Se usará de nuevo cuando te devuelvan la Key) ---
 @st.cache_data(ttl=21600)
 def obtener_datos_partidos_real(fecha):
   url = "https://v3.football.api-sports.io/fixtures"
@@ -235,18 +221,13 @@ def obtener_datos_partidos_real(fecha):
     return 500, {"errors": str(e)}
 
 
-# -----------------------------------------------------------------------------
-# AQUÍ CAMBIAMOS TEMPORALMENTE A LA FUNCIÓN DE PRUEBA
-# (Cuando recuperes tu cuenta, solo cambia esta línea de "obtener_datos_partidos_prueba"
-#  a "obtener_datos_partidos_real")
-# -----------------------------------------------------------------------------
+# Cambiar a '_real' cuando te devuelvan la Key
 def obtener_datos_partidos(fecha):
   return obtener_datos_partidos_prueba(fecha)
 
 
 @st.cache_data(ttl=86400)
 def obtener_estadisticas_equipo(league_id, season, team_id):
-  # Versión de estadísticas simuladas/vacías para la prueba visual
   return {}
 
 
@@ -273,9 +254,6 @@ def calcular_metricas_partido(item):
 
   st_loc = obtener_estadisticas_equipo(league_id, season, id_local)
   st_vis = obtener_estadisticas_equipo(league_id, season, id_visita)
-
-  pj_loc = 0
-  pj_vis = 0
 
   base_goles = 2.70
   if any(
@@ -398,7 +376,7 @@ def calcular_metricas_partido(item):
   }
 
 
-# Botón de carga ubicado elegantemente
+# Botón de carga
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
   with st.spinner("Procesando datos de prueba y probabilidades..."):
     status_code, respuesta = obtener_datos_partidos(fecha_consulta)
@@ -465,7 +443,7 @@ def aplicar_colores(val):
 
 
 # ==========================================
-# ZONA INFERIOR (MARCA DE AGUA 2 + PARTIDOS)
+# SECCIÓN INFERIOR (FILTROS Y PARTIDOS)
 # ==========================================
 if (
     "df_partidos" in st.session_state
@@ -474,7 +452,7 @@ if (
   df = st.session_state["df_partidos"].copy()
 
   with st.container():
-    st.markdown('<div class="zona-inferior">', unsafe_allow_html=True)
+    st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
     st.subheader(f"📊 Partidos listados para: {fecha_consulta}")
 
