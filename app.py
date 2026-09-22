@@ -18,6 +18,9 @@ URL_BG_ESTADIO_LLENO = "https://images.unsplash.com/photo-1522778119026-d647f059
 st.markdown(
     f"""
     <style>
+    /* Importar tipografía moderna de Google Fonts (Poppins) */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
     /* Fondo general de toda la aplicación con el estadio lleno y capa oscura elegante */
     .stApp {{
         background: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.94)), 
@@ -25,6 +28,25 @@ st.markdown(
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
+    }}
+
+    /* Estilo para centrar y embellecer el título principal */
+    .titulo-principal {{
+        font-family: 'Poppins', sans-serif;
+        text-align: center;
+        font-size: 2.3rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 5px;
+        text-shadow: 0 3px 10px rgba(0, 0, 0, 0.8);
+    }}
+
+    .subtitulo-principal {{
+        font-family: 'Poppins', sans-serif;
+        text-align: center;
+        font-size: 1rem;
+        color: #94a3b8;
+        margin-bottom: 20px;
     }}
 
     /* Contenedores translúcidos para mantener la elegancia y visibilidad */
@@ -81,18 +103,16 @@ TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 with st.container():
   st.markdown('<div class="zona-general">', unsafe_allow_html=True)
 
-  col_tit1, col_tit2 = st.columns([0.07, 0.93])
-  with col_tit1:
-    st.image(
-        "https://images.unsplash.com/photo-1518091043644-c1d4457512c6?w=100&auto=format&fit=crop",
-        width=55,
-    )
-  with col_tit2:
-    st.title("Tablero para Saladines, Donatelos y Donarumas")
-
+  # Título y subtítulo perfectamente centrados con tipografía personalizada
   st.markdown(
-      "Análisis dinámico individualizado por equipo y encuentro (Goles,"
-      " Córneres y Tarjetas únicos por partido)."
+      '<div class="titulo-principal">Saladines, Donatelos y Donarumas</div>',
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      '<div class="subtitulo-principal">Análisis dinámico individualizado por'
+      " equipo y encuentro (Goles, Córneres y Tarjetas únicos por"
+      " partido).</div>",
+      unsafe_allow_html=True,
   )
 
   col1, col2 = st.columns([1, 2])
@@ -221,7 +241,6 @@ def obtener_datos_partidos_real(fecha):
     return 500, {"errors": str(e)}
 
 
-# Cambiar a '_real' cuando te devuelvan la Key
 def obtener_datos_partidos(fecha):
   return obtener_datos_partidos_prueba(fecha)
 
@@ -251,9 +270,6 @@ def calcular_metricas_partido(item):
   hash_p = (fixture_id * 31 + id_local * 17 + id_visita * 13) % 10000
   hash_c = (fixture_id * 41 + id_local * 23 + id_visita * 7) % 10000
   hash_t = (fixture_id * 53 + id_local * 11 + id_visita * 29) % 10000
-
-  st_loc = obtener_estadisticas_equipo(league_id, season, id_local)
-  st_vis = obtener_estadisticas_equipo(league_id, season, id_visita)
 
   base_goles = 2.70
   if any(
