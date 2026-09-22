@@ -6,7 +6,7 @@ import pytz
 
 st.set_page_config(page_title="Tablero de Inteligencia Deportiva", layout="wide", page_icon="⚽")
 
-API_KEY = "7ee269127a9d49d149136d08ea470813"
+API_KEY = "c07216b2740e38ecd572f75a93ba4eb8"
 HEADERS_API = {
     'x-rapidapi-key': API_KEY,
     'x-apisports-key': API_KEY
