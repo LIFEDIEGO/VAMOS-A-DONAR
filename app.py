@@ -6,26 +6,30 @@ import requests
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON MARCA DE AGUA Y DISEÑO MEJORADO
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON MARCA DE AGUA VISIBLE
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Tablero de Predicciones", layout="wide", page_icon="⚽"
 )
 
-# URL para la marca de agua de fondo (estilo fútbol sutil)
+# URL para la marca de agua de fondo
 URL_FONDO_MARCA_AGUA = "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1920&auto=format&fit=crop"
 
-# Estilos CSS combinados (marca de agua, bordes suaves y tarjetas)
 st.markdown(
     f"""
     <style>
     /* Fondo con marca de agua sutil en toda la aplicación */
     .stApp {{
-        background: linear-gradient(rgba(14, 17, 23, 0.92), rgba(14, 17, 23, 0.95)), 
-                    url("{URL_FONDO_MARCA_AGUA}");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
+        background: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.93)), 
+                    url("{URL_FONDO_MARCA_AGUA}") !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-attachment: fixed !important;
+    }}
+
+    /* Hacer transparente el contenedor principal para que se vea el fondo */
+    .block-container {{
+        background-color: transparent !important;
     }}
 
     /* Redondear bordes de botones y cajas */
@@ -37,30 +41,23 @@ st.markdown(
     
     /* Estilo de contenedores desplegables (Expanders) */
     .streamlit-expanderHeader {{
-        background-color: rgba(26, 28, 35, 0.8) !important;
+        background-color: rgba(26, 28, 35, 0.85) !important;
         border-radius: 10px !important;
         padding: 10px !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
     }}
     
     div[data-aria-expanded="true"] {{
-        border: 1px solid rgba(46, 50, 63, 0.8) !important;
+        border: 1px solid rgba(46, 50, 63, 0.9) !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+        background-color: rgba(14, 17, 23, 0.6) !important;
     }}
 
     /* Bordes suavizados en inputs y selecciones */
     .stTextInput>div>div>input, .stSelectbox>div>div {{
         border-radius: 8px !important;
         background-color: rgba(255, 255, 255, 0.05) !important;
-    }}
-
-    /* Estilo para imágenes pequeñas alineadas en tablas */
-    .team-logo {{
-        width: 24px;
-        height: 24px;
-        vertical-align: middle;
-        margin-right: 6px;
     }}
     </style>
 """,
@@ -143,12 +140,10 @@ def calcular_metricas_partido(item):
     id_local = item["teams"]["home"]["id"]
     id_visita = item["teams"]["away"]["id"]
 
-    # Generadores deterministas por partido para evitar duplicados estáticos
     hash_p = (fixture_id * 31 + id_local * 17 + id_visita * 13) % 10000
     hash_c = (fixture_id * 41 + id_local * 23 + id_visita * 7) % 10000
     hash_t = (fixture_id * 53 + id_local * 11 + id_visita * 29) % 10000
 
-    # 1. ESTADÍSTICAS REALES POR EQUIPO DESDE LA API
     st_loc = obtener_estadisticas_equipo(league_id, season, id_local)
     st_vis = obtener_estadisticas_equipo(league_id, season, id_visita)
 
@@ -163,7 +158,6 @@ def calcular_metricas_partido(item):
         else 0
     )
 
-    # GOLES (LAMBDAS)
     gf_loc = None
     gf_vis = None
 
@@ -205,7 +199,6 @@ def calcular_metricas_partido(item):
       lambda_local = max(0.3, round(gf_loc, 2))
       lambda_visita = max(0.3, round(gf_vis, 2))
 
-    # CÓRNERES
     c_loc = None
     c_vis = None
     if isinstance(st_loc, dict) and pj_loc > 0:
@@ -233,7 +226,6 @@ def calcular_metricas_partido(item):
       delta_c = ((hash_c % 100) - 50) / 14.0
       prom_corners = round(max(7.5, min(13.2, 9.4 + delta_c)), 1)
 
-    # TARJETAS
     prom_tarjetas = None
     if (
         isinstance(st_loc, dict)
@@ -261,7 +253,6 @@ def calcular_metricas_partido(item):
       delta_t = ((hash_t % 100) - 50) / 18.0
       prom_tarjetas = round(max(2.2, min(7.2, 4.3 + delta_t)), 1)
 
-    # 2. MATRIZ DE POISSON / DIXON-COLES
     max_g = 6
     matriz_prob = []
     rho = -0.06
@@ -341,7 +332,6 @@ def calcular_metricas_partido(item):
     )
     p_aa = int(round(p_btts * 100))
 
-    # Estrategia sugerida
     if p_25_ft >= 75:
       estrategia = "Over 2.5 FT"
     elif p_15_ft >= 80:
@@ -393,7 +383,6 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
         local = item["teams"]["home"]["name"]
         visitante = item["teams"]["away"]["name"]
 
-        # URLs de los logos/escudos
         logo_local = item["teams"]["home"]["logo"]
         logo_visita = item["teams"]["away"]["logo"]
 
@@ -413,8 +402,8 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
       st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
       st.session_state["fecha_cargada"] = fecha_consulta
       st.success(
-          f"¡Se procesaron {len(lista_partidos)} partidos con datos "
-          "diferenciados!"
+          f"¡Se procesaron {len(lista_partidos)} partidos con datos"
+          " diferenciados!"
       )
 
     else:
@@ -429,9 +418,9 @@ def aplicar_colores(val):
     if val >= 80:
       return (
           "background-color: #1e4620; color: #75fb8d; font-weight: bold;"
-      )  # Verde
+      )
     elif val >= 75:
-      return "background-color: #3d350c; color: #ffeb7a;"  # Amarillo
+      return "background-color: #3d350c; color: #ffeb7a;"
   return ""
 
 
@@ -504,7 +493,6 @@ if (
       with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
         df_mostrar = df_liga.drop(columns=["Liga"])
 
-        # Renderizar tabla con imágenes formateadas mediante st.column_config
         st.dataframe(
             df_mostrar.style.map(
                 aplicar_colores,
