@@ -6,7 +6,8 @@ import pytz
 
 st.set_page_config(page_title="Tablero de Inteligencia Deportiva", layout="wide", page_icon="⚽")
 
-API_KEY = "c07216b2740e38ecd572f75a93ba4eb8"
+# API KEY ACTIVA
+API_KEY = "1dc6342cce2b065fce3a3599b033d103"
 HEADERS_API = {
     'x-rapidapi-key': API_KEY,
     'x-apisports-key': API_KEY
@@ -27,7 +28,7 @@ if opcion_fecha == "Mañana":
 else:
     fecha_consulta = ahora_ec.strftime('%Y-%m-%d')
 
-# --- FUNCIÓN DE CONSULTA CON DIAGNÓSTICO ---
+# --- FUNCIÓN DE CONSULTA CON CACHÉ ---
 @st.cache_data(ttl=21600)
 def obtener_datos_partidos(fecha):
     url = "https://v3.football.api-sports.io/fixtures"
@@ -44,7 +45,6 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
     with st.spinner("Consultando API y procesando métricas..."):
         status_code, respuesta = obtener_datos_partidos(fecha_consulta)
         
-        # Verificar si la API devolvió errores
         errores = respuesta.get('errors', {})
         datos = respuesta.get('response', [])
         
@@ -83,9 +83,9 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
         else:
             st.error(f"Error de conexión (Código HTTP: {status_code})")
             if errores:
-                st.write("Respuesta detallada de la API:", errores)
+                st.write("Respuesta de la API:", errores)
             elif not datos:
-                st.warning(f"La API respondió correctamente pero no devolvió ningún partido programado para la fecha {fecha_consulta}.")
+                st.warning(f"La API no devolvió partidos programados para la fecha {fecha_consulta}.")
 
 # --- DESPLIEGUE DE TABLA ---
 if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') == fecha_consulta:
