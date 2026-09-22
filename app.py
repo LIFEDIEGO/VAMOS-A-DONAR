@@ -4,11 +4,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 
-# Configuración de la página en modo ancho
 st.set_page_config(page_title="Tablero de Inteligencia Deportiva", layout="wide", page_icon="⚽")
 
 API_KEY = "7ee269127a9d49d149136d08ea470813"
-HEADERS_API = {'x-apisports-key': API_KEY}
+HEADERS_API = {
+    'x-rapidapi-key': API_KEY,
+    'x-apisports-key': API_KEY
+}
 TZ_ECUADOR = pytz.timezone('America/Guayaquil')
 
 st.title("⚽ Tablero de Analítica Deportiva")
@@ -16,7 +18,6 @@ st.markdown("Análisis de probabilidad de goles (+0.5 HT, +1.5 FT, AA), córnere
 
 # --- SELECCIÓN DE FECHA ---
 col1, col2 = st.columns([1, 2])
-
 with col1:
     opcion_fecha = st.radio("Selecciona la fecha a consultar:", ["Hoy", "Mañana"], horizontal=True)
 
@@ -26,24 +27,28 @@ if opcion_fecha == "Mañana":
 else:
     fecha_consulta = ahora_ec.strftime('%Y-%m-%d')
 
-# --- FUNCIÓN CON CACHÉ DE STREAMLIT ---
+# --- FUNCIÓN DE CONSULTA CON DIAGNÓSTICO ---
 @st.cache_data(ttl=21600)
 def obtener_datos_partidos(fecha):
     url = "https://v3.football.api-sports.io/fixtures"
-    # Se consulta la fecha directa sin forzar zona horaria en la API para evitar incompatibilidades
     params = {'date': fecha}
-    res = requests.get(url, headers=HEADERS_API, params=params)
     
-    if res.status_code == 200:
-        return res.json().get('response', [])
-    return []
+    try:
+        res = requests.get(url, headers=HEADERS_API, params=params, timeout=10)
+        return res.status_code, res.json()
+    except Exception as e:
+        return 500, {"errors": str(e)}
 
 # --- BOTÓN DE CARGA ---
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
     with st.spinner("Consultando API y procesando métricas..."):
-        datos = obtener_datos_partidos(fecha_consulta)
+        status_code, respuesta = obtener_datos_partidos(fecha_consulta)
         
-        if datos:
+        # Verificar si la API devolvió errores
+        errores = respuesta.get('errors', {})
+        datos = respuesta.get('response', [])
+        
+        if status_code == 200 and not errores and datos:
             lista_partidos = []
             ligas_disponibles = set()
             
@@ -51,7 +56,6 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                 nombre_liga = f"{item['league']['country'].upper()} - {item['league']['name'].upper()}"
                 ligas_disponibles.add(nombre_liga)
                 
-                # Convertir hora a horario de Ecuador (UTC-5)
                 fecha_utc = datetime.fromisoformat(item['fixture']['date'].replace('Z', '+00:00'))
                 fecha_ec = fecha_utc.astimezone(TZ_ECUADOR)
                 hora_str = fecha_ec.strftime('%H:%M')
@@ -75,17 +79,20 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
             st.session_state['ligas'] = sorted(list(ligas_disponibles))
             st.session_state['fecha_cargada'] = fecha_consulta
             st.success(f"¡Se cargaron {len(lista_partidos)} partidos guardados en memoria para {fecha_consulta}!")
+            
         else:
-            st.error("No se recibieron datos de la API. Verifica si el límite de solicitudes de tu API Key no se ha alcanzado hoy.")
+            st.error(f"Error de conexión (Código HTTP: {status_code})")
+            if errores:
+                st.write("Respuesta detallada de la API:", errores)
+            elif not datos:
+                st.warning(f"La API respondió correctamente pero no devolvió ningún partido programado para la fecha {fecha_consulta}.")
 
-# --- FILTROS DE PANTALLA Y TABLA DE DATOS ---
+# --- DESPLIEGUE DE TABLA ---
 if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') == fecha_consulta:
     df = st.session_state['df_partidos']
-    
     st.markdown("---")
     st.subheader(f"📊 Partidos listados para: {fecha_consulta}")
     
-    # Filtro visual de liga
     liga_seleccionada = st.selectbox("🔍 Filtrar por liga específica:", ["Todas las ligas"] + st.session_state['ligas'])
     
     if liga_seleccionada != "Todas las ligas":
