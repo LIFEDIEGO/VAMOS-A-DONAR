@@ -61,7 +61,7 @@ def obtener_estadisticas_equipo(league_id, season, team_id):
         return {}
 
 # -----------------------------------------------------------------------------
-# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS (BLINDADO)
+# PROCESAMIENTO COMPLETO Y DEDUCCIÓN DE MÉTRICAS
 # -----------------------------------------------------------------------------
 def calcular_metricas_completas(item):
     fixture_id = item["fixture"]["id"]
@@ -255,7 +255,7 @@ def calcular_metricas_completas(item):
     }
 
 # -----------------------------------------------------------------------------
-# INTERFAZ Y CONTROL DE FECHAS
+# INTERFAZ DE CONTROL Y FECHAS
 # -----------------------------------------------------------------------------
 opcion_fecha = st.radio("Selecciona la fecha a consultar:", ("Hoy", "Mañana"), horizontal=True)
 fecha_consulta = datetime.date.today()
@@ -269,48 +269,99 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_str})"):
     st.rerun()
 
 # -----------------------------------------------------------------------------
-# DESPLIEGUE DE RESULTADOS AGRUPADOS POR LIGA
+# CONSULTA Y PROCESAMIENTO
 # -----------------------------------------------------------------------------
 partidos = obtener_partidos_fecha(fecha_str)
 
 if not partidos:
     st.warning(f"No se encontraron partidos programados para la fecha {fecha_str}.")
 else:
-    st.success(f"Se encontraron {len(partidos)} partidos para el día {fecha_str}.")
+    # Construcción de base de datos local para filtrar
+    partidos_procesados = []
     
-    # Organizar partidos en un diccionario según su liga y país
-    partidos_por_liga = {}
     for item in partidos:
         pais = item["league"]["country"]
         nombre_liga = item["league"]["name"]
         liga_full = f"{pais} - {nombre_liga}"
-        
-        if liga_full not in partidos_por_liga:
-            partidos_por_liga[liga_full] = []
-        partidos_por_liga[liga_full].append(item)
+        hora = item["fixture"]["date"][11:16]
+        local = item["teams"]["home"]["name"]
+        visita = item["teams"]["away"]["name"]
 
-    # Renderizar desplegable (expander) por cada liga
+        m = calcular_metricas_completas(item)
+
+        partidos_procesados.append({
+            "LigaFull": liga_full,
+            "Hora": hora,
+            "Partido": f"{local} vs {visita}",
+            "Estrategia": m["Estrategia Sugerida"],
+            "1X2 %": m["Prob. Ganador (1X2)"],
+            "+0.5 HT Num": m["+0.5 HT (%)"],
+            "+1.5 FT Num": m["+1.5 FT (%)"],
+            "+2.5 FT Num": m["+2.5 FT (%)"],
+            "AA Num": m["AA (%)"],
+            "Prom. Córneres": m["Prom. Córneres"],
+            "Prom. Tarjetas": m["Prom. Tarjetas"]
+        })
+
+    # -------------------------------------------------------------------------
+    # PANEL LATERAL DE FILTROS
+    # -------------------------------------------------------------------------
+    st.sidebar.header("🔍 Filtros de Consulta")
+
+    # Lista única de Ligas y Estrategias
+    todas_ligas = sorted(list(set(p["LigaFull"] for p in partidos_procesados)))
+    todas_estrategias = sorted(list(set(p["Estrategia"] for p in partidos_procesados)))
+
+    filtro_ligas = st.sidebar.multiselect("Filtrar por Liga:", opciones:=todas_ligas, default=[])
+    filtro_estrategia = st.sidebar.multiselect("Filtrar por Estrategia:", opciones:=todas_estrategias, default=[])
+
+    st.sidebar.subheader("Porcentajes Mínimos")
+    min_ht = st.sidebar.slider("Min +0.5 HT %", 0, 100, 0)
+    min_15 = st.sidebar.slider("Min +1.5 FT %", 0, 100, 0)
+    min_25 = st.sidebar.slider("Min +2.5 FT %", 0, 100, 0)
+
+    # Aplicar filtros
+    partidos_filtrados = []
+    for p in partidos_procesados:
+        if filtro_ligas and p["LigaFull"] not in filtro_ligas:
+            continue
+        if filtro_estrategia and p["Estrategia"] not in filtro_estrategia:
+            continue
+        if p["+0.5 HT Num"] < min_ht:
+            continue
+        if p["+1.5 FT Num"] < min_15:
+            continue
+        if p["+2.5 FT Num"] < min_25:
+            continue
+        partidos_filtrados.append(p)
+
+    st.success(f"Se encontraron {len(partidos_filtrados)} partidos para el día {fecha_str} (Filtrados de {len(partidos)} totales).")
+
+    # -------------------------------------------------------------------------
+    # DESPLIEGUE POR LIGAS
+    # -------------------------------------------------------------------------
+    partidos_por_liga = {}
+    for p in partidos_filtrados:
+        liga = p["LigaFull"]
+        if liga not in partidos_por_liga:
+            partidos_por_liga[liga] = []
+        partidos_por_liga[liga].append(p)
+
     for liga_nombre, lista_items in partidos_por_liga.items():
         with st.expander(f"🏆 {liga_nombre} ({len(lista_items)} partidos)", expanded=True):
             tabla_liga = []
             for item in lista_items:
-                hora = item["fixture"]["date"][11:16]
-                local = item["teams"]["home"]["name"]
-                visita = item["teams"]["away"]["name"]
-
-                m = calcular_metricas_completas(item)
-
                 tabla_liga.append({
-                    "Hora": hora,
-                    "Partido": f"{local} vs {visita}",
-                    "Estrategia": m["Estrategia Sugerida"],
-                    "1X2 %": m["Prob. Ganador (1X2)"],
-                    "+0.5 HT": f"{m['+0.5 HT (%)']}%",
-                    "+1.5 FT": f"{m['+1.5 FT (%)']}%",
-                    "+2.5 FT": f"{m['+2.5 FT (%)']}%",
-                    "Ambos Anotan": f"{m['AA (%)']}%",
-                    "Prom. Córneres": m["Prom. Córneres"],
-                    "Prom. Tarjetas": m["Prom. Tarjetas"]
+                    "Hora": item["Hora"],
+                    "Partido": item["Partido"],
+                    "Estrategia": item["Estrategia"],
+                    "1X2 %": item["1X2 %"],
+                    "+0.5 HT": f"{item['+0.5 HT Num']}%",
+                    "+1.5 FT": f"{item['+1.5 FT Num']}%",
+                    "+2.5 FT": f"{item['+2.5 FT Num']}%",
+                    "Ambos Anotan": f"{item['AA Num']}%",
+                    "Prom. Córneres": item["Prom. Córneres"],
+                    "Prom. Tarjetas": item["Prom. Tarjetas"]
                 })
 
             st.dataframe(
