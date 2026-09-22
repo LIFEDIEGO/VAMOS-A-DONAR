@@ -87,9 +87,9 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
 def aplicar_colores(val):
     if isinstance(val, (int, float)):
         if val >= 90:
-            return 'background-color: #1e4620; color: #75fb8d; font-weight: bold;'  # Verde brillante destacado
+            return 'background-color: #1e4620; color: #75fb8d; font-weight: bold;'  # Verde destacado
         elif val >= 75:
-            return 'background-color: #3d350c; color: #ffeb7a;'  # Amarillo traslúcido
+            return 'background-color: #3d350c; color: #ffeb7a;'  # Amarillo suave
     return ''
 
 # --- PANEL DE FILTROS Y DESPLIEGUE DESPLEGABLE ---
@@ -150,10 +150,9 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
             with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
                 df_mostrar = df_liga.drop(columns=["Liga"])
                 
-                # Aplicar formato de mapa de calor suave/colores
+                # Formato de mapa de calor usando .map (compatible con Pandas reciente)
                 st.dataframe(
-                    df_mostrar.style.applymap(aplicar_colores, subset=["+0.5 HT (%)", "+1.5 FT (%)", "AA (%)"])
-                            .map_index(lambda v: 'font-weight: bold;', axis=1),
+                    df_mostrar.style.map(aplicar_colores, subset=["+0.5 HT (%)", "+1.5 FT (%)", "AA (%)"]),
                     use_container_width=True,
                     hide_index=True
                 )
