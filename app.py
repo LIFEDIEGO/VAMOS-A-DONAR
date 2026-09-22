@@ -15,7 +15,7 @@ HEADERS_API = {
 TZ_ECUADOR = pytz.timezone('America/Guayaquil')
 
 st.title("⚽ Tablero de Analítica Deportiva")
-st.markdown("Análisis de probabilidad de goles (+0.5 HT, +1.5 FT, AA), córneres y tarjetas por ligas desplegables.")
+st.markdown("Análisis de probabilidad de goles (+0.5 HT, +1.5 FT, AA), córneres, tarjetas y ganador (1X2).")
 
 # --- SELECCIÓN DE FECHA ---
 col1, col2 = st.columns([1, 2])
@@ -61,16 +61,14 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                 local = item['teams']['home']['name']
                 visitante = item['teams']['away']['name']
                 
-                # Valores estándar fijados para prueba de interfaz
                 lista_partidos.append({
                     "Liga": nombre_liga,
-                    "Hora (EC)": hora_str,
+                    "Hora (Ecuador)": hora_str,
                     "Partido": f"{local} vs {visitante}",
-                    "Local": local,
-                    "Visitante": visitante,
+                    "Prob. Ganador (1X2)": "L: 55% | E: 25% | V: 20%",
                     "Estrategia Sugerida": "Over 1.5 FT",
-                    "+0.5 HT (%)": 85,
-                    "+1.5 FT (%)": 88,
+                    "+0.5 HT (%)": 92,
+                    "+1.5 FT (%)": 94,
                     "AA (%)": 65,
                     "Prom. Córneres": 9.5,
                     "Prom. Tarjetas": 4.2
@@ -93,29 +91,33 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
     st.subheader(f"📊 Partidos listados para: {fecha_consulta}")
     
     # --- FILTROS DE BÚSQUEDA Y PORCENTAJES ---
-    f_col1, f_col2, f_col3 = st.columns([2, 1.5, 1.5])
+    f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
     
     with f_col1:
         busqueda_equipo = st.text_input("🔍 Buscar por nombre de equipo:", placeholder="Ej. Toluca, Barcelona, Lazio...")
     
     with f_col2:
         filtro_probabilidad = st.selectbox(
-            "🎯 Filtrar por probabilidad (+1.5 FT):",
-            ["Todos los partidos", "Mayor o igual a 85%", "Mayor o igual a 75%"]
+            "🎯 Filtro de alta probabilidad (≥ 90%):",
+            [
+                "Todos los partidos",
+                "Solo ≥ 90% en +0.5 HT (Primer Tiempo)",
+                "Solo ≥ 90% en +1.5 FT (Partido Completo)"
+            ]
         )
         
     with f_col3:
-        ordenar_por = st.selectbox("↕️ Ordenar resultados por:", ["Hora (EC)", "+1.5 FT (%)", "+0.5 HT (%)"])
+        ordenar_por = st.selectbox("↕️ Ordenar resultados por:", ["Hora (Ecuador)", "+1.5 FT (%)", "+0.5 HT (%)"])
 
     # Aplicar Filtro de Búsqueda
     if busqueda_equipo:
         df = df[df["Partido"].str.contains(busqueda_equipo, case=False, na=False)]
 
-    # Aplicar Filtro de Probabilidad
-    if filtro_probabilidad == "Mayor o igual a 85%":
-        df = df[df["+1.5 FT (%)"] >= 85]
-    elif filtro_probabilidad == "Mayor o igual a 75%":
-        df = df[df["+1.5 FT (%)"] >= 75]
+    # Aplicar Filtro del 90%
+    if filtro_probabilidad == "Solo ≥ 90% en +0.5 HT (Primer Tiempo)":
+        df = df[df["+0.5 HT (%)"] >= 90]
+    elif filtro_probabilidad == "Solo ≥ 90% en +1.5 FT (Partido Completo)":
+        df = df[df["+1.5 FT (%)"] >= 90]
 
     # Ordenar Datos
     if ordenar_por == "+1.5 FT (%)":
@@ -123,7 +125,7 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
     elif ordenar_por == "+0.5 HT (%)":
         df = df.sort_values(by="+0.5 HT (%)", ascending=False)
     else:
-        df = df.sort_values(by="Hora (EC)", ascending=True)
+        df = df.sort_values(by="Hora (Ecuador)", ascending=True)
 
     st.markdown(f"**Partidos mostrados:** `{len(df)}`")
 
@@ -136,11 +138,10 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
         for liga in ligas_unicas:
             df_liga = df[df["Liga"] == liga]
             
-            # Formato desplegable por Liga
             with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
-                df_mostrar = df_liga.drop(columns=["Liga", "Local", "Visitante"])
+                df_mostrar = df_liga.drop(columns=["Liga"])
                 
-                # Dar formato visual de porcentaje en la tabla
+                # Formatear porcentajes para la visualización
                 df_mostrar["+0.5 HT (%)"] = df_mostrar["+0.5 HT (%)"].astype(str) + "%"
                 df_mostrar["+1.5 FT (%)"] = df_mostrar["+1.5 FT (%)"].astype(str) + "%"
                 df_mostrar["AA (%)"] = df_mostrar["AA (%)"].astype(str) + "%"
