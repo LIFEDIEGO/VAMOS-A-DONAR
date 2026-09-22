@@ -18,7 +18,6 @@ st.caption("Modelo de Predicción Avanzado: Dixon-Coles + Poisson Recompuesto y 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE API Y HEADERS
 # -----------------------------------------------------------------------------
-# Clave actualizada según tu panel de API-Sports
 API_KEY = "1dc6342cce2b065fce3a3599b033d103"
 BASE_URL = "https://v3.football.api-sports.io"
 
@@ -270,7 +269,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_str})"):
     st.rerun()
 
 # -----------------------------------------------------------------------------
-# DESPLIEGUE DE RESULTADOS
+# DESPLIEGUE DE RESULTADOS AGRUPADOS POR LIGA
 # -----------------------------------------------------------------------------
 partidos = obtener_partidos_fecha(fecha_str)
 
@@ -279,37 +278,43 @@ if not partidos:
 else:
     st.success(f"Se encontraron {len(partidos)} partidos para el día {fecha_str}.")
     
-    datos_tabla = []
-    prog_bar = st.progress(0)
-    
-    for idx, item in enumerate(partidos):
-        hora = item["fixture"]["date"][11:16]
-        liga = item["league"]["name"]
-        local = item["teams"]["home"]["name"]
-        visita = item["teams"]["away"]["name"]
+    # Organizar partidos en un diccionario según su liga y país
+    partidos_por_liga = {}
+    for item in partidos:
+        pais = item["league"]["country"]
+        nombre_liga = item["league"]["name"]
+        liga_full = f"{pais} - {nombre_liga}"
+        
+        if liga_full not in partidos_por_liga:
+            partidos_por_liga[liga_full] = []
+        partidos_por_liga[liga_full].append(item)
 
-        m = calcular_metricas_completas(item)
+    # Renderizar desplegable (expander) por cada liga
+    for liga_nombre, lista_items in partidos_por_liga.items():
+        with st.expander(f"🏆 {liga_nombre} ({len(lista_items)} partidos)", expanded=True):
+            tabla_liga = []
+            for item in lista_items:
+                hora = item["fixture"]["date"][11:16]
+                local = item["teams"]["home"]["name"]
+                visita = item["teams"]["away"]["name"]
 
-        datos_tabla.append({
-            "Hora": hora,
-            "Liga": liga,
-            "Partido": f"{local} vs {visita}",
-            "Estrategia": m["Estrategia Sugerida"],
-            "1X2 %": m["Prob. Ganador (1X2)"],
-            "+0.5 HT": f"{m['+0.5 HT (%)']}%",
-            "+1.5 FT": f"{m['+1.5 FT (%)']}%",
-            "+2.5 FT": f"{m['+2.5 FT (%)']}%",
-            "Ambos Anotan": f"{m['AA (%)']}%",
-            "Prom. Córneres": m["Prom. Córneres"],
-            "Prom. Tarjetas": m["Prom. Tarjetas"]
-        })
+                m = calcular_metricas_completas(item)
 
-        prog_bar.progress((idx + 1) / len(partidos))
+                tabla_liga.append({
+                    "Hora": hora,
+                    "Partido": f"{local} vs {visita}",
+                    "Estrategia": m["Estrategia Sugerida"],
+                    "1X2 %": m["Prob. Ganador (1X2)"],
+                    "+0.5 HT": f"{m['+0.5 HT (%)']}%",
+                    "+1.5 FT": f"{m['+1.5 FT (%)']}%",
+                    "+2.5 FT": f"{m['+2.5 FT (%)']}%",
+                    "Ambos Anotan": f"{m['AA (%)']}%",
+                    "Prom. Córneres": m["Prom. Córneres"],
+                    "Prom. Tarjetas": m["Prom. Tarjetas"]
+                })
 
-    prog_bar.empty()
-
-    st.dataframe(
-        datos_tabla,
-        use_container_width=True,
-        hide_index=True
-    )
+            st.dataframe(
+                tabla_liga,
+                use_container_width=True,
+                hide_index=True
+            )
