@@ -110,7 +110,7 @@ st.markdown(
         text-align: center !important;
         padding: 8px;
     }}
-    /* La columna 'Partido' la mantenemos alineada a la izquierda para mejor lectura de equipos */
+    /* La columna 'Partido' la mantenemos alineada a la izquierda para mejor lectura */
     td:nth-child(2) {{
         text-align: left !important;
     }}
@@ -368,6 +368,11 @@ def calcular_metricas_partido(item):
 
   lambda_ht = (lambda_local + lambda_visita) * 0.46
   p_05_ht = int(round((1.0 - poisson_pmf(0, lambda_ht)) * 100))
+  p_15_ht = int(
+      round(
+          (1.0 - poisson_pmf(0, lambda_ht) - poisson_pmf(1, lambda_ht)) * 100
+      )
+  )
 
   p_btts = sum(
       matriz_prob[i][j] for i in range(1, max_g + 1) for j in range(1, max_g + 1)
@@ -393,6 +398,7 @@ def calcular_metricas_partido(item):
       "% Visita": p_visita,
       "Estrategia Sugerida": estrategia,
       "+0.5 HT (%)": p_05_ht,
+      "+1.5 HT (%)": p_15_ht,
       "+1.5 FT (%)": p_15_ft,
       "+2.5 FT (%)": p_25_ft,
       "AA (%)": p_aa,
@@ -504,7 +510,7 @@ if (
           [
               "Todos los partidos",
               "Solo ≥ 75% en +0.5 HT (Primer Tiempo)",
-              "Solo ≥ 80% en +0.5 HT (Primer Tiempo)",
+              "Solo ≥ 75% en +1.5 HT (Primer Tiempo)",
               "Solo ≥ 80% en +1.5 FT (Partido Completo)",
               "Solo ≥ 75% en +2.5 FT (Partido Completo)",
           ],
@@ -513,7 +519,7 @@ if (
     with f_col3:
       ordenar_por = st.selectbox(
           "↕️ Ordenar resultados por:",
-          ["Hora", "+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
+          ["Hora", "+0.5 HT (%)", "+1.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
       )
 
     if busqueda_equipo:
@@ -521,8 +527,8 @@ if (
 
     if filtro_probabilidad == "Solo ≥ 75% en +0.5 HT (Primer Tiempo)":
       df = df[df["+0.5 HT (%)"] >= 75]
-    elif filtro_probabilidad == "Solo ≥ 80% en +0.5 HT (Primer Tiempo)":
-      df = df[df["+0.5 HT (%)"] >= 80]
+    elif filtro_probabilidad == "Solo ≥ 75% en +1.5 HT (Primer Tiempo)":
+      df = df[df["+1.5 HT (%)"] >= 75]
     elif filtro_probabilidad == "Solo ≥ 80% en +1.5 FT (Partido Completo)":
       df = df[df["+1.5 FT (%)"] >= 80]
     elif filtro_probabilidad == "Solo ≥ 75% en +2.5 FT (Partido Completo)":
@@ -532,6 +538,8 @@ if (
       df = df.sort_values(by="+1.5 FT (%)", ascending=False)
     elif ordenar_por == "+2.5 FT (%)":
       df = df.sort_values(by="+2.5 FT (%)", ascending=False)
+    elif ordenar_por == "+1.5 HT (%)":
+      df = df.sort_values(by="+1.5 HT (%)", ascending=False)
     elif ordenar_por == "+0.5 HT (%)":
       df = df.sort_values(by="+0.5 HT (%)", ascending=False)
     else:
@@ -553,7 +561,13 @@ if (
           st.write(
               df_mostrar.style.map(
                   aplicar_colores,
-                  subset=["+0.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)", "AA (%)"],
+                  subset=[
+                      "+0.5 HT (%)",
+                      "+1.5 HT (%)",
+                      "+1.5 FT (%)",
+                      "+2.5 FT (%)",
+                      "AA (%)",
+                  ],
               ).format({
                   "% Local": "{:.0f}%",
                   "% Empate": "{:.0f}%",
