@@ -26,11 +26,12 @@ if opcion_fecha == "Mañana":
 else:
     fecha_consulta = ahora_ec.strftime('%Y-%m-%d')
 
-# --- FUNCIÓN CON CACHÉ DE STREAMLIT (Conserva tus tokens durante 6 horas) ---
+# --- FUNCIÓN CON CACHÉ DE STREAMLIT ---
 @st.cache_data(ttl=21600)
 def obtener_datos_partidos(fecha):
     url = "https://v3.football.api-sports.io/fixtures"
-    params = {'date': fecha, 'timezone': 'America/Guayaquil'}
+    # Se consulta la fecha directa sin forzar zona horaria en la API para evitar incompatibilidades
+    params = {'date': fecha}
     res = requests.get(url, headers=HEADERS_API, params=params)
     
     if res.status_code == 200:
@@ -50,14 +51,17 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                 nombre_liga = f"{item['league']['country'].upper()} - {item['league']['name'].upper()}"
                 ligas_disponibles.add(nombre_liga)
                 
-                hora = datetime.fromisoformat(item['fixture']['date']).strftime('%H:%M')
+                # Convertir hora a horario de Ecuador (UTC-5)
+                fecha_utc = datetime.fromisoformat(item['fixture']['date'].replace('Z', '+00:00'))
+                fecha_ec = fecha_utc.astimezone(TZ_ECUADOR)
+                hora_str = fecha_ec.strftime('%H:%M')
+                
                 local = item['teams']['home']['name']
                 visitante = item['teams']['away']['name']
                 
-                # Formato del tablero con las métricas
                 lista_partidos.append({
                     "Liga": nombre_liga,
-                    "Hora (EC)": hora,
+                    "Hora (EC)": hora_str,
                     "Partido": f"{local} vs {visitante}",
                     "Estrategia Sugerida": "Over 1.5 FT",
                     "+0.5 HT (%)": "85%",
@@ -72,7 +76,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
             st.session_state['fecha_cargada'] = fecha_consulta
             st.success(f"¡Se cargaron {len(lista_partidos)} partidos guardados en memoria para {fecha_consulta}!")
         else:
-            st.warning("No se encontraron partidos disponibles o hubo un inconveniente con la consulta.")
+            st.error("No se recibieron datos de la API. Verifica si el límite de solicitudes de tu API Key no se ha alcanzado hoy.")
 
 # --- FILTROS DE PANTALLA Y TABLA DE DATOS ---
 if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') == fecha_consulta:
