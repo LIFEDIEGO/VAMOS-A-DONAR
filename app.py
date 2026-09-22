@@ -15,7 +15,7 @@ HEADERS_API = {
 TZ_ECUADOR = pytz.timezone('America/Guayaquil')
 
 st.title("⚽ Tablero de Analítica Deportiva")
-st.markdown("Análisis de probabilidad de goles (+0.5 HT, +1.5 FT, AA), córneres, tarjetas y ganador (1X2).")
+st.markdown("Análisis visual con resaltado de probabilidades (+0.5 HT, +1.5 FT, AA), córneres, tarjetas y ganador (1X2).")
 
 # --- SELECCIÓN DE FECHA ---
 col1, col2 = st.columns([1, 2])
@@ -42,7 +42,7 @@ def obtener_datos_partidos(fecha):
 
 # --- BOTÓN DE CARGA ---
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-    with st.spinner("Procesando partidos y organizando ligas..."):
+    with st.spinner("Procesando partidos y aplicando estilos..."):
         status_code, respuesta = obtener_datos_partidos(fecha_consulta)
         
         errores = respuesta.get('errors', {})
@@ -65,7 +65,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                     "Liga": nombre_liga,
                     "Hora (Ecuador)": hora_str,
                     "Partido": f"{local} vs {visitante}",
-                    "Prob. Ganador (1X2)": "L: 55% | E: 25% | V: 20%",
+                    "Prob. Ganador (1X2)": "L: 65% | E: 20% | V: 15%",
                     "Estrategia Sugerida": "Over 1.5 FT",
                     "+0.5 HT (%)": 92,
                     "+1.5 FT (%)": 94,
@@ -76,12 +76,21 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
             
             st.session_state['df_partidos'] = pd.DataFrame(lista_partidos)
             st.session_state['fecha_cargada'] = fecha_consulta
-            st.success(f"¡Se organizaron {len(lista_partidos)} partidos por ligas para {fecha_consulta}!")
+            st.success(f"¡Se cargaron {len(lista_partidos)} partidos con diseño visual para {fecha_consulta}!")
             
         else:
             st.error(f"Error de conexión (Código HTTP: {status_code})")
             if errores:
                 st.write("Respuesta de la API:", errores)
+
+# --- APLICACIÓN DE ESTILOS DE COLOR ---
+def aplicar_colores(val):
+    if isinstance(val, (int, float)):
+        if val >= 90:
+            return 'background-color: #1e4620; color: #75fb8d; font-weight: bold;'  # Verde brillante destacado
+        elif val >= 75:
+            return 'background-color: #3d350c; color: #ffeb7a;'  # Amarillo traslúcido
+    return ''
 
 # --- PANEL DE FILTROS Y DESPLIEGUE DESPLEGABLE ---
 if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') == fecha_consulta:
@@ -129,7 +138,7 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
 
     st.markdown(f"**Partidos mostrados:** `{len(df)}`")
 
-    # --- DESPLEGABLES POR LIGA (EXPANDERS) ---
+    # --- DESPLEGABLES POR LIGA (EXPANDERS) CON ESTILOS ---
     ligas_unicas = df["Liga"].unique()
     
     if len(ligas_unicas) == 0:
@@ -141,9 +150,10 @@ if 'df_partidos' in st.session_state and st.session_state.get('fecha_cargada') =
             with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
                 df_mostrar = df_liga.drop(columns=["Liga"])
                 
-                # Formatear porcentajes para la visualización
-                df_mostrar["+0.5 HT (%)"] = df_mostrar["+0.5 HT (%)"].astype(str) + "%"
-                df_mostrar["+1.5 FT (%)"] = df_mostrar["+1.5 FT (%)"].astype(str) + "%"
-                df_mostrar["AA (%)"] = df_mostrar["AA (%)"].astype(str) + "%"
-                
-                st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+                # Aplicar formato de mapa de calor suave/colores
+                st.dataframe(
+                    df_mostrar.style.applymap(aplicar_colores, subset=["+0.5 HT (%)", "+1.5 FT (%)", "AA (%)"])
+                            .map_index(lambda v: 'font-weight: bold;', axis=1),
+                    use_container_width=True,
+                    hide_index=True
+                )
