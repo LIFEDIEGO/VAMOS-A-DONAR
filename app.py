@@ -6,22 +6,19 @@ import requests
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS CON FONDO DE ESTADIO LLENO EN TODA LA PANTALLA
+# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Tablero de Predicciones", layout="wide", page_icon="⚽"
 )
 
-# Imagen de fondo general: Estadio lleno con césped iluminado
 URL_BG_ESTADIO_LLENO = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1920&auto=format&fit=crop"
 
 st.markdown(
     f"""
     <style>
-    /* Importar tipografía moderna de Google Fonts (Poppins) */
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 
-    /* Fondo general de toda la aplicación con el estadio lleno y capa oscura elegante */
     .stApp {{
         background: linear-gradient(rgba(14, 17, 23, 0.88), rgba(14, 17, 23, 0.94)), 
                     url("{URL_BG_ESTADIO_LLENO}");
@@ -30,7 +27,6 @@ st.markdown(
         background-attachment: fixed;
     }}
 
-    /* Estilo para centrar y embellecer el título principal */
     .titulo-principal {{
         font-family: 'Poppins', sans-serif;
         text-align: center;
@@ -49,7 +45,6 @@ st.markdown(
         margin-bottom: 20px;
     }}
 
-    /* Estilo para reducir la fuente del título de partidos listados */
     .subtitulo-seccion {{
         font-family: 'Poppins', sans-serif;
         font-size: 1.1rem;
@@ -58,7 +53,6 @@ st.markdown(
         margin-bottom: 15px;
     }}
 
-    /* Contenedores translúcidos para mantener la elegancia y visibilidad */
     .zona-general {{
         background-color: rgba(14, 17, 23, 0.75);
         border: 1px solid rgba(46, 50, 63, 0.6);
@@ -69,14 +63,12 @@ st.markdown(
         backdrop-filter: blur(6px);
     }}
 
-    /* Redondear bordes de botones y cajas */
     .stButton>button {{
         border-radius: 12px !important;
         font-weight: bold !important;
         transition: all 0.3s ease !important;
     }}
     
-    /* Estilo de contenedores desplegables (Expanders) */
     .streamlit-expanderHeader {{
         background-color: rgba(26, 28, 35, 0.85) !important;
         border-radius: 10px !important;
@@ -91,13 +83,11 @@ st.markdown(
         background-color: rgba(14, 17, 23, 0.85) !important;
     }}
 
-    /* Bordes suavizados en inputs y selecciones */
     .stTextInput>div>div>input, .stSelectbox>div>div {{
         border-radius: 8px !important;
         background-color: rgba(255, 255, 255, 0.05) !important;
     }}
 
-    /* Estilos para centrar celdas y encabezados en las tablas generadas */
     table {{
         width: 100%;
         border-collapse: collapse;
@@ -110,7 +100,6 @@ st.markdown(
         text-align: center !important;
         padding: 8px;
     }}
-    /* La columna 'Partido' la mantenemos alineada a la izquierda para mejor lectura */
     td:nth-child(2) {{
         text-align: left !important;
     }}
@@ -119,7 +108,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# API KEY DE FOOTBALL-DATA.ORG
+# CREDENCIALES FOOTBALL-DATA.ORG
 API_KEY = "6addb96e64a143b7bd673d757223afc3"
 HEADERS_API = {"X-Auth-Token": API_KEY}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
@@ -156,7 +145,7 @@ with st.container():
   st.markdown("</div>", unsafe_allow_html=True)
 
 
-# --- FUNCIÓN REAL DE DATOS (FOOTBALL-DATA.ORG) ---
+# --- API CONSULTA ---
 @st.cache_data(ttl=3600)
 def obtener_datos_partidos_real(fecha):
   url = "https://api.football-data.org/v4/matches"
@@ -179,7 +168,7 @@ def poisson_pmf(k, lambda_param):
   return (math.pow(lambda_param, k) * math.exp(-lambda_param)) / math.factorial(k)
 
 
-# --- CÁLCULO DE MÉTRICAS INDIVIDUALES ÚNICAS ---
+# --- CÁLCULO DE MÉTRICAS INDIVIDUALES ---
 def calcular_metricas_partido(item):
   fixture_id = item.get("id", 0)
   league_name = item.get("competition", {}).get("name", "").upper()
@@ -267,3 +256,52 @@ def calcular_metricas_partido(item):
       for i in range(max_g + 1)
       for j in range(max_g + 1)
       if i + j < 2
+  )
+  under_2_5 = sum(
+      matriz_prob[i][j]
+      for i in range(max_g + 1)
+      for j in range(max_g + 1)
+      if i + j < 3
+  )
+
+  p_15_ft = int(round((1.0 - under_1_5) * 100))
+  p_25_ft = int(round((1.0 - under_2_5) * 100))
+
+  lambda_ht = (lambda_local + lambda_visita) * 0.46
+  p_05_ht = int(round((1.0 - poisson_pmf(0, lambda_ht)) * 100))
+  p_15_ht = int(
+      round(
+          (1.0 - poisson_pmf(0, lambda_ht) - poisson_pmf(1, lambda_ht)) * 100
+      )
+  )
+
+  p_btts = sum(
+      matriz_prob[i][j] for i in range(1, max_g + 1) for j in range(1, max_g + 1)
+  )
+  p_aa = int(round(p_btts * 100))
+
+  if p_25_ft >= 75:
+    estrategia = "Over 2.5 FT"
+  elif p_15_ft >= 80:
+    estrategia = "Over 1.5 FT"
+  elif p_05_ht >= 75:
+    estrategia = "Over 0.5 HT"
+  elif p_local >= 60:
+    estrategia = "Gana Local (1)"
+  elif p_aa >= 65:
+    estrategia = "Ambos Anotan (AA)"
+  else:
+    estrategia = "Gana / Empata Local"
+
+  return {
+      "% Local": p_local,
+      "% Empate": p_empate,
+      "% Visita": p_visita,
+      "Estrategia Sugerida": estrategia,
+      "+0.5 HT (%)": p_05_ht,
+      "+1.5 HT (%)": p_15_ht,
+      "+1.5 FT (%)": p_15_ft,
+      "+2.5 FT (%)": p_25_ft,
+      "AA (%)": p_aa,
+      "Prom. Córneres": prom_corners,
+      "Prom. Tarjetas": prom_tarjetas,
