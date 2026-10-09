@@ -129,9 +129,7 @@ with st.container():
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="subtitulo-principal">Análisis dinámico individualizado por'
-        " equipo y encuentro (Goles, Córneres y Tarjetas únicos por"
-        " partido).</div>",
+        '<div class="subtitulo-principal">Análisis dinámico individualizado por equipo y encuentro (Goles, Córneres y Tarjetas únicos por partido).</div>',
         unsafe_allow_html=True,
     )
 
@@ -351,14 +349,12 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
                 metricas = calcular_metricas_partido(item)
 
                 img_local_html = (
-                    f"<img src='{logo_local}' width='18' height='18'"
-                    " style='vertical-align: middle;'/>"
+                    f"<img src='{logo_local}' width='18' height='18' style='vertical-align: middle;'/>"
                     if logo_local
                     else ""
                 )
                 img_visita_html = (
-                    f"<img src='{logo_visita}' width='18' height='18'"
-                    " style='vertical-align: middle;'/>"
+                    f"<img src='{logo_visita}' width='18' height='18' style='vertical-align: middle;'/>"
                     if logo_visita
                     else ""
                 )
@@ -385,8 +381,7 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
             st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
             st.session_state["fecha_cargada"] = fecha_consulta
             st.success(
-                f"¡Se procesaron {len(lista_partidos)} partidos reales de todo"
-                " el mundo con éxito!"
+                f"¡Se procesaron {len(lista_partidos)} partidos reales de todo el mundo con éxito!"
             )
 
         elif errores:
@@ -400,68 +395,4 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
 def aplicar_colores(val):
     if isinstance(val, (int, float)):
         if val >= 80:
-            return (
-                "background-color: #1e4620; color: #75fb8d; font-weight: bold;"
-            )
-        elif val >= 75:
-            return "background-color: #3d350c; color: #ffeb7a;"
-    return ""
-
-
-# ==========================================
-# SECCIÓN INFERIOR (FILTROS Y TABLAS)
-# ==========================================
-if (
-    "df_partidos" in st.session_state
-    and st.session_state.get("fecha_cargada") == fecha_consulta
-):
-    df = st.session_state["df_partidos"].copy()
-
-    with st.container():
-        st.markdown('<div class="zona-general">', unsafe_allow_html=True)
-
-        st.markdown(
-            f"<div class='subtitulo-seccion'>⚽ Partidos listados para:"
-            f" {fecha_consulta}</div>",
-            unsafe_allow_html=True,
-        )
-
-        f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
-
-        with f_col1:
-            busqueda_equipo = st.text_input(
-                "🔍 Buscar por equipo:", placeholder="Ej. Liverpool, Barcelona..."
-            )
-
-        with f_col2:
-            filtro_probabilidad = st.selectbox(
-                "🎯 Filtro de probabilidad (≥ 75%):",
-                [
-                    "Todos los partidos",
-                    "Solo ≥ 75% en +0.5 HT (Primer Tiempo)",
-                    "Solo ≥ 75% en +1.5 HT (Primer Tiempo)",
-                    "Solo ≥ 80% en +1.5 FT (Partido Completo)",
-                    "Solo ≥ 75% en +2.5 FT (Partido Completo)",
-                ],
-            )
-
-        with f_col3:
-            ordenar_por = st.selectbox(
-                "↕️ Ordenar resultados por:",
-                ["Hora", "+0.5 HT (%)", "+1.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
-            )
-
-        if busqueda_equipo:
-            df = df[
-                df["Partido"].str.contains(
-                    busqueda_equipo, case=False, na=False
-                )
-            ]
-
-        if filtro_probabilidad == "Solo ≥ 75% en +0.5 HT (Primer Tiempo)":
-            df = df[df["+0.5 HT (%)"] >= 75]
-        elif filtro_probabilidad == "Solo ≥ 75% en +1.5 HT (Primer Tiempo)":
-            df = df[df["+1.5 HT (%)"] >= 75]
-        elif filtro_probabilidad == "Solo ≥ 80% en +1.5 FT (Partido Completo)":
-            df = df[df["+1.5 FT (%)"] >= 80]
-        elif filtro_probabilidad == "Solo ≥
+            return "background-color: #1e4620;
