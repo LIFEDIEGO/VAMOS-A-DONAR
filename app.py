@@ -119,12 +119,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# API KEY (Configuración con RapidAPI)
-API_KEY = "6ce7e7cf08msh77c1c4d96042bf8p111276jsn7c0772dcfa11"
-HEADERS_API = {
-    "x-rapidapi-key": API_KEY,
-    "x-rapidapi-host": "api-football-v1.p.rapidapi.com",
-}
+# API KEY DE FOOTBALL-DATA.ORG
+API_KEY = "6addb96e64a143b7bd673d757223afc3"
+HEADERS_API = {"X-Auth-Token": API_KEY}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 
 # ==========================================
@@ -159,16 +156,16 @@ with st.container():
   st.markdown("</div>", unsafe_allow_html=True)
 
 
-# --- FUNCIÓN DE CONSULTA EN VIVO A RAPIDAPI ---
+# --- FUNCIÓN DE CONSULTA REAL A FOOTBALL-DATA.ORG ---
 @st.cache_data(ttl=3600)
 def obtener_datos_partidos_real(fecha):
-  url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-  params = {"date": fecha}
+  url = "https://api.football-data.org/v4/matches"
+  params = {"dateFrom": fecha, "dateTo": fecha}
   try:
     res = requests.get(url, headers=HEADERS_API, params=params, timeout=15)
     return res.status_code, res.json()
   except Exception as e:
-    return 500, {"errors": str(e)}
+    return 500, {"message": str(e)}
 
 
 def obtener_datos_partidos(fecha):
@@ -184,11 +181,11 @@ def poisson_pmf(k, lambda_param):
 
 # --- CÁLCULO DE MÉTRICAS INDIVIDUALES ÚNICAS ---
 def calcular_metricas_partido(item):
-  fixture_id = item["fixture"]["id"]
-  league_name = item["league"]["name"].upper()
+  fixture_id = item.get("id", 0)
+  league_name = item.get("competition", {}).get("name", "").upper()
 
-  id_local = item["teams"]["home"]["id"]
-  id_visita = item["teams"]["away"]["id"]
+  id_local = item.get("homeTeam", {}).get("id", 1)
+  id_visita = item.get("awayTeam", {}).get("id", 2)
 
   hash_p = (fixture_id * 31 + id_local * 17 + id_visita * 13) % 10000
   hash_c = (fixture_id * 41 + id_local * 23 + id_visita * 7) % 10000
@@ -279,220 +276,4 @@ def calcular_metricas_partido(item):
   )
 
   p_15_ft = int(round((1.0 - under_1_5) * 100))
-  p_25_ft = int(round((1.0 - under_2_5) * 100))
-
-  lambda_ht = (lambda_local + lambda_visita) * 0.46
-  p_05_ht = int(round((1.0 - poisson_pmf(0, lambda_ht)) * 100))
-  p_15_ht = int(
-      round(
-          (1.0 - poisson_pmf(0, lambda_ht) - poisson_pmf(1, lambda_ht)) * 100
-      )
-  )
-
-  p_btts = sum(
-      matriz_prob[i][j] for i in range(1, max_g + 1) for j in range(1, max_g + 1)
-  )
-  p_aa = int(round(p_btts * 100))
-
-  if p_25_ft >= 75:
-    estrategia = "Over 2.5 FT"
-  elif p_15_ft >= 80:
-    estrategia = "Over 1.5 FT"
-  elif p_05_ht >= 75:
-    estrategia = "Over 0.5 HT"
-  elif p_local >= 60:
-    estrategia = "Gana Local (1)"
-  elif p_aa >= 65:
-    estrategia = "Ambos Anotan (AA)"
-  else:
-    estrategia = "Gana / Empata Local"
-
-  return {
-      "% Local": p_local,
-      "% Empate": p_empate,
-      "% Visita": p_visita,
-      "Estrategia Sugerida": estrategia,
-      "+0.5 HT (%)": p_05_ht,
-      "+1.5 HT (%)": p_15_ht,
-      "+1.5 FT (%)": p_15_ft,
-      "+2.5 FT (%)": p_25_ft,
-      "AA (%)": p_aa,
-      "Prom. Córneres": prom_corners,
-      "Prom. Tarjetas": prom_tarjetas,
-  }
-
-
-# Botón de carga
-if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-  with st.spinner("Consultando partidos reales y calculando probabilidades..."):
-    status_code, respuesta = obtener_datos_partidos(fecha_consulta)
-
-    errores = respuesta.get("errors", {})
-    datos = respuesta.get("response", [])
-
-    if status_code == 200 and not errores and datos:
-      lista_partidos = []
-
-      for item in datos:
-        nombre_liga = (
-            f"{item['league']['country'].upper()} -"
-            f" {item['league']['name'].upper()}"
-        )
-
-        fecha_utc = datetime.fromisoformat(
-            item["fixture"]["date"].replace("Z", "+00:00")
-        )
-        fecha_ec = fecha_utc.astimezone(TZ_ECUADOR)
-        hora_str = fecha_ec.strftime("%H:%M")
-
-        local = item["teams"]["home"]["name"]
-        visitante = item["teams"]["away"]["name"]
-
-        logo_local = item["teams"]["home"]["logo"]
-        logo_visita = item["teams"]["away"]["logo"]
-
-        metricas = calcular_metricas_partido(item)
-
-        partido_con_escudos = (
-            f"<div style='display: flex; align-items: center; gap: 8px;'>"
-            f"<img src='{logo_local}' width='18' height='18' style='vertical-align: middle;'/>"
-            f"<span>{local}</span>"
-            f"<span style='color: #94a3b8; margin: 0 4px;'>vs</span>"
-            f"<img src='{logo_visita}' width='18' height='18' style='vertical-align: middle;'/>"
-            f"<span>{visitante}</span>"
-            f"</div>"
-        )
-
-        registro = {
-            "Hora": hora_str,
-            "Partido": partido_con_escudos,
-            **metricas,
-            "Liga_Oculta": nombre_liga,
-        }
-
-        lista_partidos.append(registro)
-
-      st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
-      st.session_state["fecha_cargada"] = fecha_consulta
-      st.success(
-          f"¡Se procesaron {len(lista_partidos)} partidos reales con éxito!"
-      )
-
-    else:
-      st.error(f"Error de conexión (Código HTTP: {status_code})")
-      if errores:
-        st.write("Mensaje de la API de RapidAPI:", errores)
-
-
-# --- APLICACIÓN DE ESTILOS DE COLOR ---
-def aplicar_colores(val):
-  if isinstance(val, (int, float)):
-    if val >= 80:
-      return (
-          "background-color: #1e4620; color: #75fb8d; font-weight: bold;"
-      )
-    elif val >= 75:
-      return "background-color: #3d350c; color: #ffeb7a;"
-  return ""
-
-
-# ==========================================
-# SECCIÓN INFERIOR (FILTROS Y PARTIDOS)
-# ==========================================
-if (
-    "df_partidos" in st.session_state
-    and st.session_state.get("fecha_cargada") == fecha_consulta
-):
-  df = st.session_state["df_partidos"].copy()
-
-  with st.container():
-    st.markdown('<div class="zona-general">', unsafe_allow_html=True)
-
-    st.markdown(
-        f"<div class='subtitulo-seccion'>⚽ Partidos listados para:"
-        f" {fecha_consulta}</div>",
-        unsafe_allow_html=True,
-    )
-
-    f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
-
-    with f_col1:
-      busqueda_equipo = st.text_input(
-          "🔍 Buscar por equipo:", placeholder="Ej. Liverpool, Barcelona..."
-      )
-
-    with f_col2:
-      filtro_probabilidad = st.selectbox(
-          "🎯 Filtro de probabilidad (≥ 75%):",
-          [
-              "Todos los partidos",
-              "Solo ≥ 75% en +0.5 HT (Primer Tiempo)",
-              "Solo ≥ 75% en +1.5 HT (Primer Tiempo)",
-              "Solo ≥ 80% en +1.5 FT (Partido Completo)",
-              "Solo ≥ 75% en +2.5 FT (Partido Completo)",
-          ],
-      )
-
-    with f_col3:
-      ordenar_por = st.selectbox(
-          "↕️ Ordenar resultados por:",
-          ["Hora", "+0.5 HT (%)", "+1.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
-      )
-
-    if busqueda_equipo:
-      df = df[df["Partido"].str.contains(busqueda_equipo, case=False, na=False)]
-
-    if filtro_probabilidad == "Solo ≥ 75% en +0.5 HT (Primer Tiempo)":
-      df = df[df["+0.5 HT (%)"] >= 75]
-    elif filtro_probabilidad == "Solo ≥ 75% en +1.5 HT (Primer Tiempo)":
-      df = df[df["+1.5 HT (%)"] >= 75]
-    elif filtro_probabilidad == "Solo ≥ 80% en +1.5 FT (Partido Completo)":
-      df = df[df["+1.5 FT (%)"] >= 80]
-    elif filtro_probabilidad == "Solo ≥ 75% en +2.5 FT (Partido Completo)":
-      df = df[df["+2.5 FT (%)"] >= 75]
-
-    if ordenar_por == "+1.5 FT (%)":
-      df = df.sort_values(by="+1.5 FT (%)", ascending=False)
-    elif ordenar_por == "+2.5 FT (%)":
-      df = df.sort_values(by="+2.5 FT (%)", ascending=False)
-    elif ordenar_por == "+1.5 HT (%)":
-      df = df.sort_values(by="+1.5 HT (%)", ascending=False)
-    elif ordenar_por == "+0.5 HT (%)":
-      df = df.sort_values(by="+0.5 HT (%)", ascending=False)
-    else:
-      df = df.sort_values(by="Hora", ascending=True)
-
-    st.markdown(f"**Partidos mostrados:** `{len(df)}`")
-
-    ligas_unicas = df["Liga_Oculta"].unique()
-
-    if len(ligas_unicas) == 0:
-      st.info("No se encontraron partidos con los filtros aplicados.")
-    else:
-      for liga in ligas_unicas:
-        df_liga = df[df["Liga_Oculta"] == liga]
-
-        with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
-          df_mostrar = df_liga.drop(columns=["Liga_Oculta"])
-
-          st.write(
-              df_mostrar.style.map(
-                  aplicar_colores,
-                  subset=[
-                      "+0.5 HT (%)",
-                      "+1.5 HT (%)",
-                      "+1.5 FT (%)",
-                      "+2.5 FT (%)",
-                      "AA (%)",
-                  ],
-              ).format({
-                  "% Local": "{:.0f}%",
-                  "% Empate": "{:.0f}%",
-                  "% Visita": "{:.0f}%",
-                  "Prom. Córneres": "{:.1f}",
-                  "Prom. Tarjetas": "{:.1f}",
-              }).to_html(escape=False, index=False),
-              unsafe_allow_html=True,
-          )
-
-    st.markdown("</div>", unsafe_allow_html=True)
+  p_25_ft = int(round((1.0 - under_2_5) * 1
