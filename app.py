@@ -240,4 +240,259 @@ def calcular_metricas_partido(item):
   )
   prob_x = sum(
       matriz_prob[i][j]
-      for i
+      for i in range(max_g + 1)
+      for j in range(max_g + 1)
+      if i == j
+  )
+  prob_2 = sum(
+      matriz_prob[i][j]
+      for i in range(max_g + 1)
+      for j in range(max_g + 1)
+      if i < j
+  )
+
+  p_local = int(round(prob_1 * 100))
+  p_empate = int(round(prob_x * 100))
+  p_visita = max(1, 100 - p_local - p_empate)
+
+  under_1_5 = sum(
+      matriz_prob[i][j]
+      for i in range(max_g + 1)
+      for j in range(max_g + 1)
+      if i + j < 2
+  )
+  under_2_5 = sum(
+      matriz_prob[i][j]
+      for i in range(max_g + 1)
+      for j in range(max_g + 1)
+      if i + j < 3
+  )
+
+  p_15_ft = int(round((1.0 - under_1_5) * 100))
+  p_25_ft = int(round((1.0 - under_2_5) * 100))
+
+  lambda_ht = (lambda_local + lambda_visita) * 0.46
+  p_05_ht = int(round((1.0 - poisson_pmf(0, lambda_ht)) * 100))
+  p_15_ht = int(
+      round(
+          (1.0 - poisson_pmf(0, lambda_ht) - poisson_pmf(1, lambda_ht)) * 100
+      )
+  )
+
+  p_btts = sum(
+      matriz_prob[i][j] for i in range(1, max_g + 1) for j in range(1, max_g + 1)
+  )
+  p_aa = int(round(p_btts * 100))
+
+  if p_25_ft >= 75:
+    estrategia = "Over 2.5 FT"
+  elif p_15_ft >= 80:
+    estrategia = "Over 1.5 FT"
+  elif p_05_ht >= 75:
+    estrategia = "Over 0.5 HT"
+  elif p_local >= 60:
+    estrategia = "Gana Local (1)"
+  elif p_aa >= 65:
+    estrategia = "Ambos Anotan (AA)"
+  else:
+    estrategia = "Gana / Empata Local"
+
+  return {
+      "% Local": p_local,
+      "% Empate": p_empate,
+      "% Visita": p_visita,
+      "Estrategia Sugerida": estrategia,
+      "+0.5 HT (%)": p_05_ht,
+      "+1.5 HT (%)": p_15_ht,
+      "+1.5 FT (%)": p_15_ft,
+      "+2.5 FT (%)": p_25_ft,
+      "AA (%)": p_aa,
+      "Prom. Córneres": prom_corners,
+      "Prom. Tarjetas": prom_tarjetas,
+  }
+
+
+# ==========================================
+# BOTÓN DE CONSULTA
+# ==========================================
+if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
+  with st.spinner("Consultando todos los partidos del mundo en vivo..."):
+    status_code, respuesta = obtener_datos_partidos(fecha_consulta)
+
+    errores = respuesta.get("errors", {})
+    datos = respuesta.get("response", [])
+
+    if status_code == 200 and not errores and datos:
+      lista_partidos = []
+
+      for item in datos:
+        pais = item.get("league", {}).get("country", "").upper()
+        liga = item.get("league", {}).get("name", "").upper()
+        nombre_liga = f"{pais} - {liga}"
+
+        fecha_str = item.get("fixture", {}).get("date", "")
+        fecha_utc = datetime.fromisoformat(fecha_str.replace("Z", "+00:00"))
+        fecha_ec = fecha_utc.astimezone(TZ_ECUADOR)
+        hora_str = fecha_ec.strftime("%H:%M")
+
+        local = item.get("teams", {}).get("home", {}).get("name", "")
+        visitante = item.get("teams", {}).get("away", {}).get("name", "")
+
+        logo_local = item.get("teams", {}).get("home", {}).get("logo", "")
+        logo_visita = item.get("teams", {}).get("away", {}).get("logo", "")
+
+        metricas = calcular_metricas_partido(item)
+
+        img_local_html = (
+            f"<img src='{logo_local}' width='18' height='18'"
+            " style='vertical-align: middle;'/>"
+            if logo_local
+            else ""
+        )
+        img_visita_html = (
+            f"<img src='{logo_visita}' width='18' height='18'"
+            " style='vertical-align: middle;'/>"
+            if logo_visita
+            else ""
+        )
+
+        partido_con_escudos = (
+            f"<div style='display: flex; align-items: center; gap: 8px;'>"
+            f"{img_local_html}<span>{local}</span>"
+            f"<span style='color: #94a3b8; margin: 0 4px;'>vs</span>"
+            f"{img_visita_html}<span>{visitante}</span></div>"
+        )
+
+        registro = {
+            "Hora": hora_str,
+            "Partido": partido_con_escudos,
+            **metricas,
+            "Liga_Oculta": nombre_liga,
+        }
+
+        lista_partidos.append(registro)
+
+      st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
+      st.session_state["fecha_cargada"] = fecha_consulta
+      st.success(
+          f"¡Se procesaron {len(lista_partidos)} partidos reales de todo el"
+          " mundo con éxito!"
+      )
+
+    elif errores:
+      st.warning(f"Respuesta de la API: {errores}")
+
+    else:
+      st.error(f"Error de conexión (Código HTTP: {status_code})")
+
+
+# --- COLORES Y ESTILOS DE CELDA ---
+def aplicar_colores(val):
+  if isinstance(val, (int, float)):
+    if val >= 80:
+      return "background-color: #1e4620; color: #75fb8d; font-weight: bold;"
+    elif val >= 75:
+      return "background-color: #3d350c; color: #ffeb7a;"
+  return ""
+
+
+# ==========================================
+# SECCIÓN INFERIOR (FILTROS Y TABLAS)
+# ==========================================
+if (
+    "df_partidos" in st.session_state
+    and st.session_state.get("fecha_cargada") == fecha_consulta
+):
+  df = st.session_state["df_partidos"].copy()
+
+  with st.container():
+    st.markdown('<div class="zona-general">', unsafe_allow_html=True)
+
+    st.markdown(
+        f"<div class='subtitulo-seccion'>⚽ Partidos listados para:"
+        f" {fecha_consulta}</div>",
+        unsafe_allow_html=True,
+    )
+
+    f_col1, f_col2, f_col3 = st.columns([2, 2, 1.5])
+
+    with f_col1:
+      busqueda_equipo = st.text_input(
+          "🔍 Buscar por equipo:", placeholder="Ej. Liverpool, Barcelona..."
+      )
+
+    with f_col2:
+      filtro_probabilidad = st.selectbox(
+          "🎯 Filtro de probabilidad (≥ 75%):",
+          [
+              "Todos los partidos",
+              "Solo ≥ 75% en +0.5 HT (Primer Tiempo)",
+              "Solo ≥ 75% en +1.5 HT (Primer Tiempo)",
+              "Solo ≥ 80% en +1.5 FT (Partido Completo)",
+              "Solo ≥ 75% en +2.5 FT (Partido Completo)",
+          ],
+      )
+
+    with f_col3:
+      ordenar_por = st.selectbox(
+          "↕️ Ordenar resultados por:",
+          ["Hora", "+0.5 HT (%)", "+1.5 HT (%)", "+1.5 FT (%)", "+2.5 FT (%)"],
+      )
+
+    if busqueda_equipo:
+      df = df[df["Partido"].str.contains(busqueda_equipo, case=False, na=False)]
+
+    if filtro_probabilidad == "Solo ≥ 75% en +0.5 HT (Primer Tiempo)":
+      df = df[df["+0.5 HT (%)"] >= 75]
+    elif filtro_probabilidad == "Solo ≥ 75% en +1.5 HT (Primer Tiempo)":
+      df = df[df["+1.5 HT (%)"] >= 75]
+    elif filtro_probabilidad == "Solo ≥ 80% en +1.5 FT (Partido Completo)":
+      df = df[df["+1.5 FT (%)"] >= 80]
+    elif filtro_probabilidad == "Solo ≥ 75% en +2.5 FT (Partido Completo)":
+      df = df[df["+2.5 FT (%)"] >= 75]
+
+    if ordenar_por == "+1.5 FT (%)":
+      df = df.sort_values(by="+1.5 FT (%)", ascending=False)
+    elif ordenar_por == "+2.5 FT (%)":
+      df = df.sort_values(by="+2.5 FT (%)", ascending=False)
+    elif ordenar_por == "+1.5 HT (%)":
+      df = df.sort_values(by="+1.5 HT (%)", ascending=False)
+    elif ordenar_por == "+0.5 HT (%)":
+      df = df.sort_values(by="+0.5 HT (%)", ascending=False)
+    else:
+      df = df.sort_values(by="Hora", ascending=True)
+
+    st.markdown(f"**Partidos mostrados:** `{len(df)}`")
+
+    ligas_unicas = df["Liga_Oculta"].unique()
+
+    if len(ligas_unicas) == 0:
+      st.info("No se encontraron partidos con los filtros aplicados.")
+    else:
+      for liga in ligas_unicas:
+        df_liga = df[df["Liga_Oculta"] == liga]
+
+        with st.expander(f"🏆 {liga} ({len(df_liga)} partido/s)"):
+          df_mostrar = df_liga.drop(columns=["Liga_Oculta"])
+
+          st.write(
+              df_mostrar.style.map(
+                  aplicar_colores,
+                  subset=[
+                      "+0.5 HT (%)",
+                      "+1.5 HT (%)",
+                      "+1.5 FT (%)",
+                      "+2.5 FT (%)",
+                      "AA (%)",
+                  ],
+              ).format({
+                  "% Local": "{:.0f}%",
+                  "% Empate": "{:.0f}%",
+                  "% Visita": "{:.0f}%",
+                  "Prom. Córneres": "{:.1f}",
+                  "Prom. Tarjetas": "{:.1f}",
+              }).to_html(escape=False, index=False),
+              unsafe_allow_html=True,
+          )
+
+    st.markdown("</div>", unsafe_allow_html=True)
