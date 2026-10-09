@@ -112,7 +112,7 @@ st.markdown(
 # API KEY Y CONFIGURACIÓN DE API-FOOTBALL (RAPIDAPI)
 # Reemplaza la clave de abajo con tu clave de RapidAPI
 # -----------------------------------------------------------------------------
-API_KEY_RAPIDAPI = "6addb96e64a143b7bd673d757223afc3"
+API_KEY_RAPIDAPI = 6addb96e64a143b7bd673d757223afc3
 
 HEADERS_API = {
     "x-rapidapi-key": API_KEY_RAPIDAPI,
