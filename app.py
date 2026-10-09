@@ -119,9 +119,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# API KEY (En modo de prueba temporal)
-API_KEY = "1dc6342cce2b065fce3a3599b033d103"
-HEADERS_API = {"x-rapidapi-key": API_KEY, "x-apisports-key": API_KEY}
+# API KEY (Configuración con RapidAPI)
+API_KEY = "6ce7e7cf08msh77c1c4d96042bf8p111276jsn7c0772dcfa11"
+HEADERS_API = {
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": "api-football-v1.p.rapidapi.com",
+}
 TZ_ECUADOR = pytz.timezone("America/Guayaquil")
 
 # ==========================================
@@ -156,108 +159,20 @@ with st.container():
   st.markdown("</div>", unsafe_allow_html=True)
 
 
-# --- FUNCIÓN TEMPORAL DE PRUEBA (MOCK DATA) ---
-def obtener_datos_partidos_prueba(fecha):
-  datos_falsos = {
-      "errors": {},
-      "response": [
-          {
-              "fixture": {
-                  "id": 101,
-                  "date": f"{fecha}T15:00:00+00:00",
-                  "status": {"short": "NS", "elapsed": 0},
-              },
-              "league": {
-                  "id": 39,
-                  "name": "Premier League",
-                  "country": "England",
-                  "season": 2026,
-              },
-              "teams": {
-                  "home": {
-                      "id": 40,
-                      "name": "Liverpool",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/40.png"
-                      ),
-                  },
-                  "away": {
-                      "id": 42,
-                      "name": "Arsenal",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/42.png"
-                      ),
-                  },
-              },
-              "goals": {"home": None, "away": None},
-          },
-          {
-              "fixture": {
-                  "id": 102,
-                  "date": f"{fecha}T17:30:00+00:00",
-                  "status": {"short": "NS", "elapsed": 0},
-              },
-              "league": {
-                  "id": 39,
-                  "name": "Premier League",
-                  "country": "England",
-                  "season": 2026,
-              },
-              "teams": {
-                  "home": {
-                      "id": 33,
-                      "name": "Manchester United",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/33.png"
-                      ),
-                  },
-                  "away": {
-                      "id": 50,
-                      "name": "Manchester City",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/50.png"
-                      ),
-                  },
-              },
-              "goals": {"home": None, "away": None},
-          },
-          {
-              "fixture": {
-                  "id": 103,
-                  "date": f"{fecha}T20:00:00+00:00",
-                  "status": {"short": "NS", "elapsed": 0},
-              },
-              "league": {
-                  "id": 140,
-                  "name": "La Liga",
-                  "country": "Spain",
-                  "season": 2026,
-              },
-              "teams": {
-                  "home": {
-                      "id": 529,
-                      "name": "Barcelona",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/529.png"
-                      ),
-                  },
-                  "away": {
-                      "id": 541,
-                      "name": "Real Madrid",
-                      "logo": (
-                          "https://media.api-sports.io/football/teams/541.png"
-                      ),
-                  },
-              },
-              "goals": {"home": None, "away": None},
-          },
-      ],
-  }
-  return 200, datos_falsos
+# --- FUNCIÓN DE CONSULTA EN VIVO A RAPIDAPI ---
+@st.cache_data(ttl=3600)
+def obtener_datos_partidos_real(fecha):
+  url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+  params = {"date": fecha}
+  try:
+    res = requests.get(url, headers=HEADERS_API, params=params, timeout=15)
+    return res.status_code, res.json()
+  except Exception as e:
+    return 500, {"errors": str(e)}
 
 
 def obtener_datos_partidos(fecha):
-  return obtener_datos_partidos_prueba(fecha)
+  return obtener_datos_partidos_real(fecha)
 
 
 # --- MATEMÁTICA: POISSON PMF ---
@@ -409,7 +324,7 @@ def calcular_metricas_partido(item):
 
 # Botón de carga
 if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
-  with st.spinner("Procesando datos de prueba y probabilidades..."):
+  with st.spinner("Consultando partidos reales y calculando probabilidades..."):
     status_code, respuesta = obtener_datos_partidos(fecha_consulta)
 
     errores = respuesta.get("errors", {})
@@ -460,11 +375,13 @@ if st.button(f"🔄 Cargar / Actualizar Partidos ({fecha_consulta})"):
       st.session_state["df_partidos"] = pd.DataFrame(lista_partidos)
       st.session_state["fecha_cargada"] = fecha_consulta
       st.success(
-          f"¡Se procesaron {len(lista_partidos)} partidos de prueba con éxito!"
+          f"¡Se procesaron {len(lista_partidos)} partidos reales con éxito!"
       )
 
     else:
       st.error(f"Error de conexión (Código HTTP: {status_code})")
+      if errores:
+        st.write("Mensaje de la API de RapidAPI:", errores)
 
 
 # --- APLICACIÓN DE ESTILOS DE COLOR ---
